@@ -13,12 +13,33 @@ from .game_engine import GameEngine, PLAYER_NAMES
 
 
 ROOM_TTL_SECONDS = 60 * 60 * 6
+RANDOM_WAIT_TTL_SECONDS = 60 * 5
+ONLINE_WINDOW_SECONDS = 45
 MAX_LOG_ITEMS = 80
+
+
+@dataclass
+class PlayerStats:
+    score: int = 0
+    wins: int = 0
+    losses: int = 0
+    streak: int = 0
+
+    def to_dict(self) -> dict[str, int]:
+        return {
+            "score": self.score,
+            "wins": self.wins,
+            "losses": self.losses,
+            "streak": self.streak,
+        }
 
 
 @dataclass
 class Room:
     code: str
+    random_match: bool = False
+    ranked: bool = False
+    ranked_recorded: bool = False
     game: GameEngine = field(default_factory=GameEngine)
     player_ids: list[str | None] = field(default_factory=lambda: [None, None])
     player_names: list[str] = field(default_factory=lambda: PLAYER_NAMES.copy())
@@ -65,6 +86,9 @@ class Room:
                 "name": self.player_names[idx],
                 "occupied": self.player_ids[idx] is not None,
                 "connected": self.connected[idx],
+                "stats": stats_for(self.player_ids[idx]).to_dict()
+                if self.player_ids[idx]
+                else None,
             }
             for idx in range(2)
         ]
@@ -78,6 +102,8 @@ class Room:
                 "started": self.started,
                 "players": self.public_players(),
                 "rolloff": self.rolloff,
+                "randomMatch": self.random_match,
+                "ranked": self.ranked,
                 "createdAt": self.created_at,
                 "updatedAt": self.updated_at,
             },
@@ -85,6 +111,7 @@ class Room:
                 "clientId": client_id,
                 "player": slot,
                 "spectator": slot is None,
+                "stats": stats_for(client_id).to_dict() if client_id else None,
             },
             "game": self.game.snapshot(),
             "log": self.log,
@@ -131,11 +158,29 @@ app.add_middleware(
 )
 
 rooms: dict[str, Room] = {}
+player_stats: dict[str, PlayerStats] = {}
+client_last_seen: dict[str, float] = {}
 
 
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"ok": True, "service": "tikatuka", "rooms": len(rooms)}
+
+
+@app.post("/api/heartbeat")
+async def heartbeat(payload: dict[str, Any]) -> dict[str, Any]:
+    client_id = clean_client_id(str(payload.get("clientId", "")))
+    if client_id:
+        touch_client(client_id)
+    return status_payload(client_id or None)
+
+
+@app.get("/api/status")
+async def get_status(client_id: str | None = None) -> dict[str, Any]:
+    cleaned = clean_client_id(client_id or "")
+    if cleaned:
+        touch_client(cleaned)
+    return status_payload(cleaned or None)
 
 
 @app.post("/api/rooms")
@@ -147,6 +192,50 @@ async def create_room() -> dict[str, str]:
             rooms[code] = Room(code=code)
             return {"code": code}
     raise HTTPException(status_code=503, detail="방 번호를 만들 수 없습니다.")
+
+
+@app.post("/api/random-match")
+async def random_match(payload: dict[str, Any]) -> dict[str, Any]:
+    cleanup_rooms()
+    client_id = clean_client_id(str(payload.get("clientId", "")))
+    if not client_id:
+        raise HTTPException(status_code=400, detail="clientId가 필요합니다.")
+    nickname = clean_nickname(str(payload.get("nickname", "")), PLAYER_NAMES[0])
+    touch_client(client_id)
+
+    for room in sorted(rooms.values(), key=lambda item: item.created_at):
+        if (
+            room.random_match
+            and not room.started
+            and room.player_ids[0] == client_id
+            and room.player_ids[1] is None
+        ):
+            room.player_names[0] = clean_nickname(nickname, PLAYER_NAMES[0])
+            room.touch()
+            return {"code": room.code, "matched": False, "player": 0}
+
+    for room in sorted(rooms.values(), key=lambda item: item.created_at):
+        if (
+            room.random_match
+            and not room.started
+            and room.player_ids[0] is not None
+            and room.player_ids[0] != client_id
+            and room.player_ids[1] is None
+        ):
+            room.player_ids[1] = client_id
+            room.player_names[1] = clean_nickname(nickname, PLAYER_NAMES[1])
+            room.touch()
+            return {"code": room.code, "matched": True, "player": 1}
+
+    for _ in range(200):
+        code = f"{secrets.randbelow(10_000):04d}"
+        if code not in rooms:
+            room = Room(code=code, random_match=True, ranked=True)
+            room.player_ids[0] = client_id
+            room.player_names[0] = clean_nickname(nickname, PLAYER_NAMES[0])
+            rooms[code] = room
+            return {"code": code, "matched": False, "player": 0}
+    raise HTTPException(status_code=503, detail="랜덤 매칭 방을 만들 수 없습니다.")
 
 
 @app.get("/api/rooms/{code}")
@@ -166,6 +255,10 @@ async def websocket_room(websocket: WebSocket, code: str) -> None:
     if not client_id:
         await websocket.close(code=1008, reason="client_id is required")
         return
+    client_id = clean_client_id(client_id)
+    if not client_id:
+        await websocket.close(code=1008, reason="client_id is required")
+        return
     room = rooms.get(code)
     if room is None:
         await websocket.close(code=1008, reason="room not found")
@@ -173,12 +266,13 @@ async def websocket_room(websocket: WebSocket, code: str) -> None:
 
     await websocket.accept()
     async with room.lock:
+        touch_client(client_id)
         slot = room.slot_for(client_id)
         if slot is not None:
             room.player_names[slot] = clean_nickname(nickname, PLAYER_NAMES[slot])
             room.connected[slot] = True
         room.sockets[client_id] = websocket
-        if not room.started and all(room.player_ids):
+        if not room.started and all(room.player_ids) and all(room.connected):
             room.started = True
             room.add_events([{"type": "room_started"}])
             room.add_events(room.start_game_events())
@@ -221,6 +315,9 @@ async def handle_message(room: Room, client_id: str, payload: dict[str, Any]) ->
             if slot != 0:
                 await send_error(room, client_id, "방장만 다시 시작할 수 있습니다.")
                 return
+            if room.ranked:
+                await send_error(room, client_id, "랜덤 매칭은 다시하기를 사용할 수 없습니다.")
+                return
             events = room.game.reset()
             room.started = all(room.player_ids)
             if room.started:
@@ -239,6 +336,7 @@ async def handle_message(room: Room, client_id: str, payload: dict[str, Any]) ->
             await send_error(room, client_id, str(exc))
             return
         room.add_events(events)
+        apply_ranked_result(room)
         await broadcast(room)
 
 
@@ -287,10 +385,26 @@ def cleanup_rooms() -> None:
     expired = [
         code
         for code, room in rooms.items()
-        if not room.sockets and now - room.updated_at > ROOM_TTL_SECONDS
+        if not room.sockets
+        and (
+            now - room.updated_at > ROOM_TTL_SECONDS
+            or (
+                room.random_match
+                and not room.started
+                and now - room.updated_at > RANDOM_WAIT_TTL_SECONDS
+            )
+        )
     ]
     for code in expired:
         rooms.pop(code, None)
+
+    stale_clients = [
+        client_id
+        for client_id, seen_at in client_last_seen.items()
+        if now - seen_at > ONLINE_WINDOW_SECONDS * 4
+    ]
+    for client_id in stale_clients:
+        client_last_seen.pop(client_id, None)
 
 
 def clean_nickname(value: str, fallback: str) -> str:
@@ -298,3 +412,70 @@ def clean_nickname(value: str, fallback: str) -> str:
     if not nickname:
         return fallback
     return nickname[:16]
+
+
+def clean_client_id(value: str) -> str:
+    return value.strip()[:80]
+
+
+def stats_for(client_id: str | None) -> PlayerStats:
+    if not client_id:
+        return PlayerStats()
+    if client_id not in player_stats:
+        player_stats[client_id] = PlayerStats()
+    return player_stats[client_id]
+
+
+def touch_client(client_id: str) -> None:
+    if client_id:
+        client_last_seen[client_id] = time.time()
+
+
+def online_user_count() -> int:
+    now = time.time()
+    active = {
+        client_id
+        for client_id, seen_at in client_last_seen.items()
+        if now - seen_at <= ONLINE_WINDOW_SECONDS
+    }
+    for room in rooms.values():
+        active.update(room.sockets.keys())
+    return len(active)
+
+
+def status_payload(client_id: str | None = None) -> dict[str, Any]:
+    cleanup_rooms()
+    return {
+        "onlineUsers": online_user_count(),
+        "stats": stats_for(client_id).to_dict() if client_id else PlayerStats().to_dict(),
+    }
+
+
+def apply_ranked_result(room: Room) -> None:
+    if not room.ranked or room.ranked_recorded or not room.game.result:
+        return
+    winner = room.game.result.get("winner")
+    if winner not in (0, 1):
+        room.ranked_recorded = True
+        return
+    loser = 1 - winner
+    winner_id = room.player_ids[winner]
+    loser_id = room.player_ids[loser]
+    if not winner_id or not loser_id:
+        return
+
+    winner_stats = stats_for(winner_id)
+    loser_stats = stats_for(loser_id)
+
+    win_bonus = max(0, winner_stats.streak) * 2
+    loss_penalty = max(0, -loser_stats.streak) * 2
+
+    winner_stats.score += 10 + win_bonus
+    winner_stats.wins += 1
+    winner_stats.streak = winner_stats.streak + 1 if winner_stats.streak > 0 else 1
+
+    loser_stats.score = max(0, loser_stats.score - (10 + loss_penalty))
+    loser_stats.losses += 1
+    loser_stats.streak = loser_stats.streak - 1 if loser_stats.streak < 0 else -1
+
+    room.ranked_recorded = True

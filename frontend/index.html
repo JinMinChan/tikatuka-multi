@@ -35,6 +35,11 @@
         </header>
 
         <section class="lobby" id="lobby">
+          <div class="online-users" id="online-users">접속 0명</div>
+          <div class="lobby-rating" id="lobby-rating">
+            <strong>0점</strong>
+            <span>0승 / 0패</span>
+          </div>
           <h2>멀티플레이 방</h2>
           <p>방을 만들면 4자리 번호가 생성됩니다. 상대가 이 번호로 입장하면 게임이 시작됩니다.</p>
           <div class="lobby-actions">
@@ -42,6 +47,7 @@
               <span>사용할 닉네임 :</span>
               <input id="nickname-input" maxlength="16" autocomplete="nickname" placeholder="닉네임 입력" />
             </label>
+            <button id="random-match-button" class="primary-match" type="button">랜덤 매칭</button>
             <button id="create-room-button" type="button">방 만들기</button>
             <form id="join-form">
               <input id="room-code-input" inputmode="numeric" maxlength="4" placeholder="방 번호 4자리" />

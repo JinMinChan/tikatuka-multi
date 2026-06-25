@@ -15,6 +15,7 @@ const state = {
   clientId: getClientId(),
   ws: null,
   snapshot: null,
+  status: null,
   roomCode: null,
   leaving: false,
 };
@@ -28,6 +29,7 @@ const soundState = {
 
 const fx = {
   seenEvents: new Set(),
+  dieRects: new Map(),
   rollingIds: new Set(),
   popIds: new Set(),
   flickingIds: new Set(),
@@ -47,7 +49,10 @@ const els = {
   lobby: document.querySelector("#lobby"),
   gameShell: document.querySelector("#game-shell"),
   lobbyStatus: document.querySelector("#lobby-status"),
+  onlineUsers: document.querySelector("#online-users"),
+  lobbyRating: document.querySelector("#lobby-rating"),
   nicknameInput: document.querySelector("#nickname-input"),
+  randomMatch: document.querySelector("#random-match-button"),
   createRoom: document.querySelector("#create-room-button"),
   joinForm: document.querySelector("#join-form"),
   roomCodeInput: document.querySelector("#room-code-input"),
@@ -209,6 +214,7 @@ function playSound(name, delay = 0) {
 
 function clearFx() {
   fx.seenEvents.clear();
+  fx.dieRects.clear();
   fx.rollingIds.clear();
   fx.popIds.clear();
   fx.flickingIds.clear();
@@ -247,6 +253,22 @@ async function createRoom() {
   const response = await fetch(apiUrl("/api/rooms"), { method: "POST" });
   if (!response.ok) throw new Error(await response.text());
   const data = await response.json();
+  await connectRoom(data.code, { skipCheck: true });
+}
+
+async function randomMatch() {
+  unlockSound();
+  const nickname = getNickname();
+  if (!nickname) return;
+  setStatus("랜덤 매칭 찾는 중...");
+  const response = await fetch(apiUrl("/api/random-match"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId: state.clientId, nickname }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json();
+  setStatus(data.matched ? "랜덤 상대를 찾았습니다." : "랜덤 상대를 기다리는 중...");
   await connectRoom(data.code, { skipCheck: true });
 }
 
@@ -311,6 +333,34 @@ async function connectRoom(code, options = {}) {
   });
 }
 
+async function refreshStatus() {
+  try {
+    const response = await fetch(apiUrl("/api/heartbeat"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientId: state.clientId,
+        nickname: els.nicknameInput.value,
+      }),
+    });
+    if (!response.ok) return;
+    state.status = await response.json();
+    renderLobbyStatus();
+  } catch {
+    // 로컬 프론트만 띄운 상태에서는 백엔드가 없을 수 있다.
+  }
+}
+
+function renderLobbyStatus() {
+  const onlineUsers = state.status?.onlineUsers ?? 0;
+  const stats = state.status?.stats || { score: 0, wins: 0, losses: 0, streak: 0 };
+  els.onlineUsers.textContent = `접속 ${onlineUsers}명`;
+  els.lobbyRating.innerHTML = `
+    <strong>${stats.score}점</strong>
+    <span>${stats.wins}승 / ${stats.losses}패</span>
+  `;
+}
+
 async function checkRoomExists(roomCode) {
   setStatus("방 확인 중...");
   try {
@@ -339,6 +389,7 @@ function returnToLobby(message) {
   clearFx();
   setRoomMode(false);
   setStatus(message);
+  refreshStatus();
 }
 
 function sendAction(action, payload = {}) {
@@ -367,7 +418,8 @@ function render() {
   if (!snapshot) return;
   processFx(snapshot);
   const { room, game, you } = snapshot;
-  els.roomCode.textContent = room.code;
+  els.roomCode.textContent = room.randomMatch ? "랜덤 매칭" : room.code;
+  els.copyRoom.hidden = Boolean(room.randomMatch);
 
   const meText =
     you.player === null || you.player === undefined
@@ -385,17 +437,28 @@ function render() {
       "is-turn",
       room.started && game.currentPlayer === player && game.phase !== "game_over",
     );
-    playerState.textContent = `${player === 0 ? "초록" : "빨강"} 진영 · ${
-      roomPlayer.connected ? "접속 중" : roomPlayer.occupied ? "재접속 대기" : "빈자리"
-    }`;
+    playerState.innerHTML = renderPlayerStatLine(roomPlayer.stats);
   }
 
   renderBoard(game);
   renderTrays(game, you);
   renderControls(room, game, you);
-  renderResult(game, you);
+  renderResult(room, game, you);
   renderStartBanner(room);
   renderLog(snapshot.log || []);
+  rememberDieRects();
+}
+
+function renderPlayerStatLine(stats) {
+  if (!stats) return "";
+  const record = `${stats.wins}승 / ${stats.losses}패`;
+  if (stats.streak > 0) {
+    return `${record} · <span class="streak-win">${stats.streak}연승 중</span>`;
+  }
+  if (stats.streak < 0) {
+    return `${record} · <span class="streak-loss">${Math.abs(stats.streak)}연패 중</span>`;
+  }
+  return record;
 }
 
 function requestRender() {
@@ -621,6 +684,8 @@ function addStrikeFlyer(die, player, opponent, field, removedDice = []) {
 function findStrikeSourceRect(player, die) {
   const exactDie = document.querySelector(`#tray-${player} .die[data-die-id="${die.id}"]`);
   if (exactDie) return exactDie.getBoundingClientRect();
+  const cached = fx.dieRects.get(String(die.id));
+  if (cached) return cached;
   const trayDie = document.querySelector(`#tray-${player} .die`);
   if (trayDie) return trayDie.getBoundingClientRect();
   const tray = document.querySelector(`#tray-${player}`);
@@ -641,6 +706,23 @@ function findStrikeTargetRect(opponent, field, removedDice = []) {
   return document
     .querySelector(`.field[data-player="${opponent}"][data-field="${field}"]`)
     ?.getBoundingClientRect() || null;
+}
+
+function rememberDieRects() {
+  document.querySelectorAll(".die[data-die-id]").forEach((element) => {
+    if (element.closest(".strike-flyer-shell")) return;
+    const id = element.dataset.dieId;
+    if (!id) return;
+    const rect = element.getBoundingClientRect();
+    fx.dieRects.set(id, {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      right: rect.right,
+      bottom: rect.bottom,
+    });
+  });
 }
 
 function lockFor(duration) {
@@ -743,14 +825,14 @@ function renderControls(room, game, you) {
   }
 }
 
-function renderResult(game, you) {
+function renderResult(room, game, you) {
   if (!game.result) {
     els.resultBanner.hidden = true;
     return;
   }
   els.resultWinnerText.textContent =
     game.result.winner === null ? "무승부!" : `${playerName(game.result.winner)} 승리!`;
-  els.restart.disabled = you.player !== 0;
+  els.restart.disabled = you.player !== 0 || room.ranked;
   els.resultBanner.hidden = false;
 }
 
@@ -938,6 +1020,10 @@ els.createRoom.addEventListener("click", () => {
   createRoom().catch((error) => setStatus(`방 생성 실패: ${error.message}`));
 });
 
+els.randomMatch.addEventListener("click", () => {
+  randomMatch().catch((error) => setStatus(`랜덤 매칭 실패: ${error.message}`));
+});
+
 els.joinForm.addEventListener("submit", (event) => {
   event.preventDefault();
   connectRoom(els.roomCodeInput.value).catch((error) =>
@@ -1001,3 +1087,6 @@ els.nicknameInput.value = localStorage.getItem("tikatuka.nickname") || "";
 setupSound();
 setRoomMode(false);
 setStatus("");
+renderLobbyStatus();
+refreshStatus();
+window.setInterval(refreshStatus, 15000);

@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.main import app, rooms
+from app.main import Room, app, apply_ranked_result, client_last_seen, player_stats, rooms
 
 
 class FixedRng:
@@ -17,6 +17,8 @@ class FixedRng:
 
 def test_create_room_returns_unique_four_digit_code():
     rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
     client = TestClient(app)
 
     response = client.post("/api/rooms")
@@ -30,6 +32,8 @@ def test_create_room_returns_unique_four_digit_code():
 
 def test_two_players_joining_room_starts_game_and_accepts_action():
     rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
     client = TestClient(app)
     code = client.post("/api/rooms").json()["code"]
     rooms[code].game.rng = FixedRng([2, 5, 4, 3])
@@ -64,6 +68,8 @@ def test_two_players_joining_room_starts_game_and_accepts_action():
 
 def test_host_disconnect_destroys_room_number():
     rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
     client = TestClient(app)
     code = client.post("/api/rooms").json()["code"]
 
@@ -77,6 +83,8 @@ def test_host_disconnect_destroys_room_number():
 
 def test_host_disconnect_notifies_guest_and_destroys_room():
     rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
     client = TestClient(app)
     code = client.post("/api/rooms").json()["code"]
     rooms[code].game.rng = FixedRng([6, 1, 4])
@@ -93,3 +101,89 @@ def test_host_disconnect_notifies_guest_and_destroys_room():
             assert closed["type"] == "room_closed"
             assert "방장" in closed["message"]
             assert code not in rooms
+
+
+def test_random_match_pairs_two_clients_without_room_number_entry():
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    client = TestClient(app)
+
+    waiting = client.post(
+        "/api/random-match",
+        json={"clientId": "random-a", "nickname": "Alpha"},
+    ).json()
+    matched = client.post(
+        "/api/random-match",
+        json={"clientId": "random-b", "nickname": "Beta"},
+    ).json()
+
+    assert waiting["matched"] is False
+    assert matched["matched"] is True
+    assert matched["code"] == waiting["code"]
+
+    room = rooms[waiting["code"]]
+    assert room.random_match is True
+    assert room.ranked is True
+    assert room.player_ids == ["random-a", "random-b"]
+
+    room.game.rng = FixedRng([5, 2, 4])
+    with client.websocket_connect(f"/ws/{room.code}?client_id=random-a&nickname=Alpha") as ws0:
+        first = ws0.receive_json()
+        assert first["you"]["player"] == 0
+        assert first["room"]["started"] is False
+        with client.websocket_connect(f"/ws/{room.code}?client_id=random-b&nickname=Beta") as ws1:
+            started_for_p0 = ws0.receive_json()
+            started_for_p1 = ws1.receive_json()
+
+            assert started_for_p0["room"]["started"] is True
+            assert started_for_p1["you"]["player"] == 1
+            assert started_for_p0["room"]["ranked"] is True
+            assert started_for_p0["room"]["players"][0]["name"] == "Alpha"
+            assert started_for_p0["room"]["players"][1]["name"] == "Beta"
+
+
+def test_ranked_result_updates_score_wins_losses_and_streak_weight():
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+
+    room = Room(code="1234", random_match=True, ranked=True)
+    room.player_ids = ["winner", "loser"]
+    room.game.result = {"winner": 0}
+
+    apply_ranked_result(room)
+
+    assert player_stats["winner"].score == 10
+    assert player_stats["winner"].wins == 1
+    assert player_stats["winner"].streak == 1
+    assert player_stats["loser"].score == 0
+    assert player_stats["loser"].losses == 1
+    assert player_stats["loser"].streak == -1
+
+    next_room = Room(code="1235", random_match=True, ranked=True)
+    next_room.player_ids = ["winner", "loser"]
+    next_room.game.result = {"winner": 0}
+
+    apply_ranked_result(next_room)
+
+    assert player_stats["winner"].score == 22
+    assert player_stats["winner"].wins == 2
+    assert player_stats["winner"].streak == 2
+    assert player_stats["loser"].score == 0
+    assert player_stats["loser"].losses == 2
+    assert player_stats["loser"].streak == -2
+
+
+def test_manual_room_result_does_not_update_ranked_stats():
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+
+    room = Room(code="9999", ranked=False)
+    room.player_ids = ["a", "b"]
+    room.game.result = {"winner": 0}
+
+    apply_ranked_result(room)
+
+    assert player_stats == {}
