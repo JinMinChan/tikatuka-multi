@@ -52,6 +52,12 @@ class Room:
                 return idx
         return None
 
+    def existing_slot_for(self, client_id: str) -> int | None:
+        for idx, known_id in enumerate(self.player_ids):
+            if known_id == client_id:
+                return idx
+        return None
+
     def public_players(self) -> list[dict[str, Any]]:
         return [
             {
@@ -188,9 +194,12 @@ async def websocket_room(websocket: WebSocket, code: str) -> None:
         pass
     finally:
         async with room.lock:
-            slot = room.slot_for(client_id)
+            slot = room.existing_slot_for(client_id)
             if room.sockets.get(client_id) is websocket:
                 room.sockets.pop(client_id, None)
+            if slot == 0 and rooms.get(room.code) is room:
+                await destroy_room(room, "방장이 나가 방이 종료되었습니다.")
+                return
             if slot is not None:
                 room.connected[slot] = False
             room.touch()
@@ -248,6 +257,22 @@ async def send_error(room: Room, client_id: str, message: str) -> None:
     socket = room.sockets.get(client_id)
     if socket:
         await socket.send_json({"type": "error", "message": message})
+
+
+async def destroy_room(room: Room, message: str) -> None:
+    rooms.pop(room.code, None)
+    sockets = list(room.sockets.values())
+    room.sockets.clear()
+    room.started = False
+    for socket in sockets:
+        try:
+            await socket.send_json({"type": "room_closed", "message": message})
+        except RuntimeError:
+            pass
+        try:
+            await socket.close(code=1000, reason=message)
+        except RuntimeError:
+            pass
 
 
 def get_room_or_404(code: str) -> Room:

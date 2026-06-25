@@ -132,10 +132,10 @@ async function createRoom() {
   const response = await fetch(apiUrl("/api/rooms"), { method: "POST" });
   if (!response.ok) throw new Error(await response.text());
   const data = await response.json();
-  connectRoom(data.code);
+  await connectRoom(data.code, { skipCheck: true });
 }
 
-function connectRoom(code) {
+async function connectRoom(code, options = {}) {
   const nickname = getNickname();
   if (!nickname) return;
   const roomCode = String(code || "").replace(/\D/g, "").padStart(4, "0").slice(-4);
@@ -143,6 +143,12 @@ function connectRoom(code) {
     setStatus("방 번호는 4자리 숫자여야 합니다.");
     return;
   }
+
+  if (!options.skipCheck) {
+    const exists = await checkRoomExists(roomCode);
+    if (!exists) return;
+  }
+
   if (state.ws) state.ws.close();
   clearFx();
   state.leaving = false;
@@ -171,6 +177,8 @@ function connectRoom(code) {
       render();
     } else if (message.type === "error") {
       setStatus(message.message);
+    } else if (message.type === "room_closed") {
+      returnToLobby(message.message || "방이 종료되었습니다.");
     }
   });
 
@@ -185,6 +193,36 @@ function connectRoom(code) {
   socket.addEventListener("error", () => {
     setStatus("WebSocket 연결 오류");
   });
+}
+
+async function checkRoomExists(roomCode) {
+  setStatus("방 확인 중...");
+  try {
+    const response = await fetch(apiUrl(`/api/rooms/${roomCode}`), { method: "GET" });
+    if (response.status === 404) {
+      setStatus("없는 방 번호입니다.");
+      return false;
+    }
+    if (!response.ok) {
+      setStatus("방 번호 확인에 실패했습니다.");
+      return false;
+    }
+    return true;
+  } catch {
+    setStatus("서버와 연결할 수 없습니다.");
+    return false;
+  }
+}
+
+function returnToLobby(message) {
+  state.leaving = true;
+  if (state.ws) state.ws.close();
+  state.ws = null;
+  state.snapshot = null;
+  state.roomCode = null;
+  clearFx();
+  setRoomMode(false);
+  setStatus(message);
 }
 
 function sendAction(action, payload = {}) {
@@ -320,8 +358,13 @@ function triggerFx(event, snapshot) {
 
   if (event.type === "egg_flick") {
     const opponent = 1 - event.player;
-    addGhost(event.placedDie, event.player, event.field);
-    for (const die of event.opponentDiceRemoved || []) addGhost(die, opponent, event.field);
+    addGhost(event.placedDie, event.player, event.field, [
+      "striking",
+      event.player === 0 ? "strike-right" : "strike-left",
+    ]);
+    for (const die of event.opponentDiceRemoved || []) {
+      addGhost(die, opponent, event.field, ["flicking"]);
+    }
     pulseSet(
       fx.shieldBlockIds,
       (event.shieldedDiceBlocked || []).map((die) => die.id),
@@ -365,10 +408,10 @@ function pulseFields(set, keys, duration) {
   }, duration);
 }
 
-function addGhost(die, player, field) {
+function addGhost(die, player, field, extraClasses = ["flicking"]) {
   if (!die) return;
   const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  fx.ghosts.push({ key, die, player, field });
+  fx.ghosts.push({ key, die, player, field, extraClasses });
   window.setTimeout(() => {
     fx.ghosts = fx.ghosts.filter((ghost) => ghost.key !== key);
     render();
@@ -376,7 +419,11 @@ function addGhost(die, player, field) {
 }
 
 function lockFor(duration) {
-  fx.lockUntil = Math.max(fx.lockUntil, Date.now() + duration);
+  const until = Date.now() + duration;
+  fx.lockUntil = Math.max(fx.lockUntil, until);
+  window.setTimeout(() => {
+    if (!isFxLocked()) render();
+  }, duration + 30);
 }
 
 function phaseText(game) {
@@ -603,7 +650,7 @@ function renderFieldDice(dice) {
 function renderGhostDice(player, field) {
   return fx.ghosts
     .filter((ghost) => ghost.player === player && ghost.field === field)
-    .map((ghost) => renderDie(ghost.die, { extraClasses: ["flicking"] }))
+    .map((ghost) => renderDie(ghost.die, { extraClasses: ghost.extraClasses }))
     .join("");
 }
 
@@ -651,7 +698,9 @@ els.createRoom.addEventListener("click", () => {
 
 els.joinForm.addEventListener("submit", (event) => {
   event.preventDefault();
-  connectRoom(els.roomCodeInput.value);
+  connectRoom(els.roomCodeInput.value).catch((error) =>
+    setStatus(`입장 실패: ${error.message}`),
+  );
 });
 
 els.copyRoom.addEventListener("click", () => {
@@ -660,14 +709,7 @@ els.copyRoom.addEventListener("click", () => {
 });
 
 els.leave.addEventListener("click", () => {
-  state.leaving = true;
-  if (state.ws) state.ws.close();
-  state.ws = null;
-  state.snapshot = null;
-  state.roomCode = null;
-  clearFx();
-  setRoomMode(false);
-  setStatus("로비로 돌아왔습니다.");
+  returnToLobby("로비로 돌아왔습니다.");
 });
 
 els.restart.addEventListener("click", sendRestart);

@@ -60,3 +60,36 @@ def test_two_players_joining_room_starts_game_and_accepts_action():
             after_action = ws0.receive_json()
 
             assert after_action["game"]["boards"][1][0]
+
+
+def test_host_disconnect_destroys_room_number():
+    rooms.clear()
+    client = TestClient(app)
+    code = client.post("/api/rooms").json()["code"]
+
+    with client.websocket_connect(f"/ws/{code}?client_id=host&nickname=Host") as ws0:
+        ws0.receive_json()
+        assert code in rooms
+
+    assert code not in rooms
+    assert client.get(f"/api/rooms/{code}").status_code == 404
+
+
+def test_host_disconnect_notifies_guest_and_destroys_room():
+    rooms.clear()
+    client = TestClient(app)
+    code = client.post("/api/rooms").json()["code"]
+    rooms[code].game.rng = FixedRng([6, 1, 4])
+
+    with client.websocket_connect(f"/ws/{code}?client_id=host&nickname=Host") as host:
+        host.receive_json()
+        with client.websocket_connect(f"/ws/{code}?client_id=guest&nickname=Guest") as guest:
+            host.receive_json()
+            guest.receive_json()
+
+            host.close()
+            closed = guest.receive_json()
+
+            assert closed["type"] == "room_closed"
+            assert "방장" in closed["message"]
+            assert code not in rooms
