@@ -3,7 +3,7 @@ const FIELD_NAMES = ["TOP", "MIDDLE", "BOTTOM"];
 
 const DEFAULT_SERVER =
   window.TIKATUKA_SERVER_URL ||
-  (window.location.protocol === "file:" ? "http://161.33.14.219" : window.location.origin);
+  (window.location.protocol === "file:" ? "http://tikatuka.duckdns.org" : window.location.origin);
 
 const state = {
   serverUrl: DEFAULT_SERVER.replace(/\/$/, ""),
@@ -26,7 +26,9 @@ const fx = {
   ghosts: [],
   startBanner: null,
   rollDelayUntil: 0,
+  animatingUntil: 0,
   lockUntil: 0,
+  renderTimer: null,
 };
 
 const els = {
@@ -111,7 +113,10 @@ function clearFx() {
   fx.ghosts = [];
   fx.startBanner = null;
   fx.rollDelayUntil = 0;
+  fx.animatingUntil = 0;
   fx.lockUntil = 0;
+  if (fx.renderTimer) window.clearTimeout(fx.renderTimer);
+  fx.renderTimer = null;
 }
 
 function apiUrl(path) {
@@ -176,7 +181,7 @@ async function connectRoom(code, options = {}) {
     const message = JSON.parse(event.data);
     if (message.type === "snapshot") {
       state.snapshot = message;
-      render();
+      requestRender();
     } else if (message.type === "error") {
       setStatus(message.message);
     } else if (message.type === "room_closed") {
@@ -284,6 +289,14 @@ function render() {
   renderLog(snapshot.log || []);
 }
 
+function requestRender() {
+  if (Date.now() < fx.animatingUntil) {
+    scheduleFxRender();
+    return;
+  }
+  render();
+}
+
 function processFx(snapshot) {
   const events = [...(snapshot.log || [])].reverse();
   for (const event of events) {
@@ -304,15 +317,22 @@ function eventKey(event) {
 
 function triggerFx(event, snapshot) {
   if (event.type === "first_player_rolloff") {
-    const duration = 2200;
+    const duration = 3600;
     fx.startBanner = {
+      key: `${event.ts ?? Date.now()}:${event.rolls.join("-")}:${event.winner}`,
       rolls: event.rolls,
       winner: event.winner,
       until: Date.now() + duration,
     };
-    fx.rollDelayUntil = fx.startBanner.until - 180;
+    fx.rollDelayUntil = fx.startBanner.until - 300;
+    markAnimation(duration);
     lockFor(duration - 300);
-    window.setTimeout(render, duration);
+    const bannerKey = fx.startBanner.key;
+    window.setTimeout(() => {
+      if (els.startBanner && fx.startBanner?.key === bannerKey) {
+        els.startBanner.hidden = true;
+      }
+    }, duration);
     return;
   }
 
@@ -398,9 +418,10 @@ function pulseSet(set, ids, duration) {
   const validIds = ids.filter((id) => id !== undefined && id !== null);
   if (!validIds.length) return;
   for (const id of validIds) set.add(id);
+  markAnimation(duration);
   window.setTimeout(() => {
     for (const id of validIds) set.delete(id);
-    render();
+    scheduleFxRender();
   }, duration);
 }
 
@@ -417,9 +438,10 @@ function delayedPulseSet(set, ids, duration, delay = 0) {
 
 function pulseFields(set, keys, duration) {
   for (const key of keys) set.add(key);
+  markAnimation(duration);
   window.setTimeout(() => {
     for (const key of keys) set.delete(key);
-    render();
+    scheduleFxRender();
   }, duration);
 }
 
@@ -427,18 +449,32 @@ function addGhost(die, player, field, extraClasses = ["flicking"]) {
   if (!die) return;
   const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   fx.ghosts.push({ key, die, player, field, extraClasses });
+  markAnimation(620);
   window.setTimeout(() => {
     fx.ghosts = fx.ghosts.filter((ghost) => ghost.key !== key);
-    render();
+    scheduleFxRender();
   }, 620);
 }
 
 function lockFor(duration) {
-  const until = Date.now() + duration;
-  fx.lockUntil = Math.max(fx.lockUntil, until);
-  window.setTimeout(() => {
-    if (!isFxLocked()) render();
-  }, duration + 30);
+  fx.lockUntil = Math.max(fx.lockUntil, Date.now() + duration);
+}
+
+function markAnimation(duration) {
+  fx.animatingUntil = Math.max(fx.animatingUntil, Date.now() + duration);
+}
+
+function scheduleFxRender() {
+  if (fx.renderTimer) window.clearTimeout(fx.renderTimer);
+  const delay = Math.max(0, fx.animatingUntil - Date.now() + 30);
+  fx.renderTimer = window.setTimeout(() => {
+    fx.renderTimer = null;
+    if (Date.now() < fx.animatingUntil) {
+      scheduleFxRender();
+      return;
+    }
+    render();
+  }, delay);
 }
 
 function phaseText(game) {
@@ -535,22 +571,26 @@ function renderStartBanner(room) {
   const banner = fx.startBanner;
   if (!banner || Date.now() > banner.until) {
     els.startBanner.hidden = true;
+    delete els.startBanner.dataset.key;
     return;
   }
 
-  for (let player = 0; player < 2; player += 1) {
-    els.rolloffNames[player].textContent = room.players[player]?.name || DEFAULT_PLAYER_NAMES[player];
-    els.rolloffDice[player].innerHTML = renderDie(
-      {
-        id: `rolloff-${player}-${banner.rolls[player]}`,
-        value: banner.rolls[player],
-        shield: false,
-        owner: player,
-      },
-      { extraClasses: ["rolling"] },
-    );
+  if (els.startBanner.dataset.key !== banner.key) {
+    for (let player = 0; player < 2; player += 1) {
+      els.rolloffNames[player].textContent = room.players[player]?.name || DEFAULT_PLAYER_NAMES[player];
+      els.rolloffDice[player].innerHTML = renderDie(
+        {
+          id: `rolloff-${player}-${banner.rolls[player]}`,
+          value: banner.rolls[player],
+          shield: false,
+          owner: player,
+        },
+        { extraClasses: ["rolling"] },
+      );
+    }
+    els.startBannerText.textContent = `${playerName(banner.winner)} 선공!`;
+    els.startBanner.dataset.key = banner.key;
   }
-  els.startBannerText.textContent = `${playerName(banner.winner)} 선공!`;
   els.startBanner.hidden = false;
 }
 
