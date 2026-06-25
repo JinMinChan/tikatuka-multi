@@ -25,6 +25,7 @@ const fx = {
   shieldFields: new Set(),
   ghosts: [],
   startBanner: null,
+  rollDelayUntil: 0,
   lockUntil: 0,
 };
 
@@ -109,6 +110,7 @@ function clearFx() {
   fx.shieldFields.clear();
   fx.ghosts = [];
   fx.startBanner = null;
+  fx.rollDelayUntil = 0;
   fx.lockUntil = 0;
 }
 
@@ -308,14 +310,16 @@ function triggerFx(event, snapshot) {
       winner: event.winner,
       until: Date.now() + duration,
     };
+    fx.rollDelayUntil = fx.startBanner.until - 180;
     lockFor(duration - 300);
     window.setTimeout(render, duration);
     return;
   }
 
   if (event.type === "die_rolled") {
-    pulseSet(fx.rollingIds, [event.die?.id], 720);
-    lockFor(520);
+    const delay = Math.max(0, fx.rollDelayUntil - Date.now());
+    delayedPulseSet(fx.rollingIds, [event.die?.id], 720, delay);
+    lockFor(delay + 520);
     return;
   }
 
@@ -363,7 +367,7 @@ function triggerFx(event, snapshot) {
       event.player === 0 ? "strike-right" : "strike-left",
     ]);
     for (const die of event.opponentDiceRemoved || []) {
-      addGhost(die, opponent, event.field, ["flicking"]);
+      addGhost(die, opponent, event.field, ["victim-flick"]);
     }
     pulseSet(
       fx.shieldBlockIds,
@@ -398,6 +402,17 @@ function pulseSet(set, ids, duration) {
     for (const id of validIds) set.delete(id);
     render();
   }, duration);
+}
+
+function delayedPulseSet(set, ids, duration, delay = 0) {
+  if (delay <= 0) {
+    pulseSet(set, ids, duration);
+    return;
+  }
+  window.setTimeout(() => {
+    pulseSet(set, ids, duration);
+    render();
+  }, delay);
 }
 
 function pulseFields(set, keys, duration) {
