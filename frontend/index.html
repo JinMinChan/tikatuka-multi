@@ -14,7 +14,7 @@
             <div class="turn-chip" id="turn-chip-0">TURN</div>
             <div class="avatar avatar-green"></div>
             <div>
-              <strong>FrangGabriel</strong>
+              <strong id="player-name-0">FrangGabriel</strong>
               <small id="player-state-0">초록 진영</small>
             </div>
           </article>
@@ -22,14 +22,13 @@
           <article class="brand">
             <div class="dice-mark">🎲</div>
             <h1>티카투카 <span>TikaTuka</span></h1>
-            <button class="exit-button" id="leave-button" type="button">나가기</button>
           </article>
 
           <article class="player-card player-card-right" id="player-card-1">
             <div class="turn-chip" id="turn-chip-1">TURN</div>
             <div class="avatar avatar-red"></div>
             <div>
-              <strong>레온하트 네리아</strong>
+              <strong id="player-name-1">레온하트 네리아</strong>
               <small id="player-state-1">빨강 진영</small>
             </div>
           </article>
@@ -39,13 +38,17 @@
           <h2>멀티플레이 방</h2>
           <p>방을 만들면 4자리 번호가 생성됩니다. 상대가 이 번호로 입장하면 게임이 시작됩니다.</p>
           <div class="lobby-actions">
+            <label class="nickname-row" for="nickname-input">
+              <span>사용할 닉네임 :</span>
+              <input id="nickname-input" maxlength="16" autocomplete="nickname" placeholder="닉네임 입력" />
+            </label>
             <button id="create-room-button" type="button">방 만들기</button>
             <form id="join-form">
               <input id="room-code-input" inputmode="numeric" maxlength="4" placeholder="방 번호 4자리" />
               <button type="submit">입장</button>
             </form>
           </div>
-          <p class="status" id="lobby-status">서버 연결 준비 완료</p>
+          <p class="status" id="lobby-status"></p>
         </section>
 
         <section class="game-shell" id="game-shell" hidden>
@@ -56,6 +59,7 @@
             </div>
             <button id="copy-room-button" type="button">복사</button>
             <p id="connection-status">연결 중</p>
+            <button class="leave-room-button" id="leave-button" type="button">나가기</button>
           </section>
 
           <section class="board-wrap">
@@ -117,4 +121,3 @@
     <script src="./app.js"></script>
   </body>
 </html>
-

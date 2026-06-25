@@ -1,4 +1,4 @@
-const PLAYER_NAMES = ["FrangGabriel", "레온하트 네리아"];
+const DEFAULT_PLAYER_NAMES = ["FrangGabriel", "레온하트 네리아"];
 const FIELD_NAMES = ["TOP", "MIDDLE", "BOTTOM"];
 
 const DEFAULT_SERVER =
@@ -11,12 +11,14 @@ const state = {
   ws: null,
   snapshot: null,
   roomCode: null,
+  leaving: false,
 };
 
 const els = {
   lobby: document.querySelector("#lobby"),
   gameShell: document.querySelector("#game-shell"),
   lobbyStatus: document.querySelector("#lobby-status"),
+  nicknameInput: document.querySelector("#nickname-input"),
   createRoom: document.querySelector("#create-room-button"),
   joinForm: document.querySelector("#join-form"),
   roomCodeInput: document.querySelector("#room-code-input"),
@@ -28,6 +30,10 @@ const els = {
   resultBanner: document.querySelector("#result-banner"),
   resultWinnerText: document.querySelector("#result-winner-text"),
   eventLog: document.querySelector("#event-log"),
+  playerNames: [
+    document.querySelector("#player-name-0"),
+    document.querySelector("#player-name-1"),
+  ],
   trayControls: [
     document.querySelector("#tray-controls-0"),
     document.querySelector("#tray-controls-1"),
@@ -45,6 +51,29 @@ function getClientId() {
   return created;
 }
 
+function getNickname() {
+  const nickname = els.nicknameInput.value.trim().replace(/\s+/g, " ");
+  if (!nickname) {
+    setStatus("사용할 닉네임을 입력해주세요.");
+    els.nicknameInput.focus();
+    return null;
+  }
+  const clipped = nickname.slice(0, 16);
+  localStorage.setItem("tikatuka.nickname", clipped);
+  els.nicknameInput.value = clipped;
+  return clipped;
+}
+
+function playerName(index) {
+  return state.snapshot?.room.players?.[index]?.name || DEFAULT_PLAYER_NAMES[index] || "플레이어";
+}
+
+function setRoomMode(inRoom) {
+  document.body.classList.toggle("in-room", inRoom);
+  els.lobby.hidden = inRoom;
+  els.gameShell.hidden = !inRoom;
+}
+
 function apiUrl(path) {
   return `${state.serverUrl}${path}`;
 }
@@ -60,6 +89,7 @@ function setStatus(message) {
 }
 
 async function createRoom() {
+  if (!getNickname()) return;
   setStatus("방 만드는 중...");
   const response = await fetch(apiUrl("/api/rooms"), { method: "POST" });
   if (!response.ok) throw new Error(await response.text());
@@ -68,20 +98,26 @@ async function createRoom() {
 }
 
 function connectRoom(code) {
+  const nickname = getNickname();
+  if (!nickname) return;
   const roomCode = String(code || "").replace(/\D/g, "").padStart(4, "0").slice(-4);
   if (!/^\d{4}$/.test(roomCode)) {
     setStatus("방 번호는 4자리 숫자여야 합니다.");
     return;
   }
   if (state.ws) state.ws.close();
+  state.leaving = false;
   state.roomCode = roomCode;
   els.roomCode.textContent = roomCode;
-  els.lobby.hidden = true;
-  els.gameShell.hidden = false;
+  setRoomMode(true);
   setStatus(`${roomCode} 방에 연결 중...`);
 
   const socket = new WebSocket(
-    wsUrl(`/ws/${roomCode}?client_id=${encodeURIComponent(state.clientId)}`),
+    wsUrl(
+      `/ws/${roomCode}?client_id=${encodeURIComponent(state.clientId)}&nickname=${encodeURIComponent(
+        nickname,
+      )}`,
+    ),
   );
   state.ws = socket;
 
@@ -100,6 +136,10 @@ function connectRoom(code) {
   });
 
   socket.addEventListener("close", () => {
+    if (state.leaving) {
+      state.leaving = false;
+      return;
+    }
     setStatus("연결이 끊겼습니다. 새로고침하거나 다시 입장해주세요.");
   });
 
@@ -111,6 +151,10 @@ function connectRoom(code) {
 function sendAction(action, payload = {}) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
     setStatus("서버와 연결되어 있지 않습니다.");
+    return;
+  }
+  if (!isMyTurn()) {
+    setStatus("아직 내 차례가 아닙니다.");
     return;
   }
   state.ws.send(JSON.stringify({ type: "action", action, ...payload }));
@@ -130,7 +174,7 @@ function render() {
   const meText =
     you.player === null || you.player === undefined
       ? "관전 중"
-      : `${PLAYER_NAMES[you.player]}로 플레이 중`;
+      : `${playerName(you.player)}로 플레이 중`;
   const waitText = room.started ? phaseText(game) : "상대 입장 대기 중";
   setStatus(`${meText} · ${waitText}`);
 
@@ -138,6 +182,7 @@ function render() {
     const card = document.querySelector(`#player-card-${player}`);
     const playerState = document.querySelector(`#player-state-${player}`);
     const roomPlayer = room.players[player];
+    els.playerNames[player].textContent = roomPlayer.name;
     card.classList.toggle(
       "is-turn",
       room.started && game.currentPlayer === player && game.phase !== "game_over",
@@ -155,9 +200,9 @@ function render() {
 }
 
 function phaseText(game) {
-  if (game.phase === "place_normal") return `${PLAYER_NAMES[game.currentPlayer]} 배치 차례`;
-  if (game.phase === "select_die") return `${PLAYER_NAMES[game.currentPlayer]} 주사위 선택`;
-  if (game.phase === "place_bonus") return `${PLAYER_NAMES[game.currentPlayer]} 보너스 배치`;
+  if (game.phase === "place_normal") return `${playerName(game.currentPlayer)} 배치 차례`;
+  if (game.phase === "select_die") return `${playerName(game.currentPlayer)} 주사위 선택`;
+  if (game.phase === "place_bonus") return `${playerName(game.currentPlayer)} 보너스 배치`;
   if (game.phase === "game_over") return "게임 종료";
   return "자동 굴림";
 }
@@ -229,7 +274,7 @@ function renderResult(game, you) {
     return;
   }
   els.resultWinnerText.textContent =
-    game.result.winner === null ? "무승부!" : `${PLAYER_NAMES[game.result.winner]} 승리!`;
+    game.result.winner === null ? "무승부!" : `${playerName(game.result.winner)} 승리!`;
   els.restart.disabled = you.player !== 0;
   els.resultBanner.hidden = false;
 }
@@ -237,47 +282,60 @@ function renderResult(game, you) {
 function renderLog(log) {
   els.eventLog.innerHTML = log
     .slice(0, 10)
-    .map((event) => `<li>${eventText(event)}</li>`)
+    .map((event) => `<li>${escapeHtml(eventText(event))}</li>`)
     .join("");
 }
 
 function eventText(event) {
   if (event.type === "room_started") return "상대가 입장했습니다. 게임 시작!";
   if (event.type === "die_rolled") {
-    return `${PLAYER_NAMES[event.player]} 자동 굴림 · ${dieText(event.die)}${
+    return `${playerName(event.player)} 자동 굴림 · ${dieText(event.die)}${
       event.openingShield ? " · 개막 실드" : ""
     }`;
   }
   if (event.type === "hand_trick") {
-    return `${PLAYER_NAMES[event.player]} 타짜의 손놀림 · ${event.kept.value} 킵, ${event.rerolled.value} 획득`;
+    return `${playerName(event.player)} 타짜의 손놀림 · ${event.kept.value} 킵, ${event.rerolled.value} 획득`;
   }
   if (event.type === "die_selected") {
-    return `${PLAYER_NAMES[event.player]} ${event.selected.value} 선택`;
+    return `${playerName(event.player)} ${event.selected.value} 선택`;
   }
   if (event.type === "normal_die_placed") {
-    return `${PLAYER_NAMES[event.player]} ${FIELD_NAMES[event.field]}에 ${event.die.value} 배치`;
+    return `${playerName(event.player)} ${FIELD_NAMES[event.field]}에 ${event.die.value} 배치`;
   }
   if (event.type === "egg_flick") {
-    return `알까기! ${PLAYER_NAMES[event.player]} ${event.value} · 상대 ${event.opponentDiceRemoved.length}개 제거`;
+    return `알까기! ${playerName(event.player)} ${event.value} · 상대 ${event.opponentDiceRemoved.length}개 제거`;
   }
   if (event.type === "shield_only_match") {
     return `실드 방어 · ${event.value}은 제거되지 않았습니다`;
   }
   if (event.type === "bonus_die_placed") {
-    return `${PLAYER_NAMES[event.player]} 보너스 실드 ${event.die.value} → ${PLAYER_NAMES[event.targetPlayer]} ${FIELD_NAMES[event.field]}`;
+    return `${playerName(event.player)} 보너스 실드 ${event.die.value} → ${playerName(event.targetPlayer)} ${FIELD_NAMES[event.field]}`;
   }
   if (event.type === "hold") {
-    return `${PLAYER_NAMES[event.player]} 홀드`;
+    return `${playerName(event.player)} 홀드`;
   }
   if (event.type === "turn_passed") {
-    return `${PLAYER_NAMES[event.player]} 턴 패스`;
+    return `${playerName(event.player)} 턴 패스`;
   }
   if (event.type === "game_finished") {
     const winner = event.result.winner;
-    return winner === null ? "게임 종료 · 무승부" : `게임 종료 · ${PLAYER_NAMES[winner]} 승리`;
+    return winner === null ? "게임 종료 · 무승부" : `게임 종료 · ${playerName(winner)} 승리`;
   }
   if (event.type === "game_reset") return "새 게임 시작";
   return event.type;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => {
+    const map = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return map[char];
+  });
 }
 
 function isMyTurn() {
@@ -368,12 +426,12 @@ els.copyRoom.addEventListener("click", () => {
 });
 
 els.leave.addEventListener("click", () => {
+  state.leaving = true;
   if (state.ws) state.ws.close();
   state.ws = null;
   state.snapshot = null;
   state.roomCode = null;
-  els.lobby.hidden = false;
-  els.gameShell.hidden = true;
+  setRoomMode(false);
   setStatus("로비로 돌아왔습니다.");
 });
 
@@ -407,5 +465,6 @@ document.addEventListener("click", (event) => {
   }
 });
 
-setStatus(`서버: ${state.serverUrl}`);
-
+els.nicknameInput.value = localStorage.getItem("tikatuka.nickname") || "";
+setRoomMode(false);
+setStatus("");

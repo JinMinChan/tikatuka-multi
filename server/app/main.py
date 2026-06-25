@@ -21,6 +21,7 @@ class Room:
     code: str
     game: GameEngine = field(default_factory=GameEngine)
     player_ids: list[str | None] = field(default_factory=lambda: [None, None])
+    player_names: list[str] = field(default_factory=lambda: PLAYER_NAMES.copy())
     connected: list[bool] = field(default_factory=lambda: [False, False])
     sockets: dict[str, WebSocket] = field(default_factory=dict)
     started: bool = False
@@ -54,7 +55,7 @@ class Room:
         return [
             {
                 "index": idx,
-                "name": PLAYER_NAMES[idx],
+                "name": self.player_names[idx],
                 "occupied": self.player_ids[idx] is not None,
                 "connected": self.connected[idx],
             }
@@ -123,6 +124,7 @@ async def get_room(code: str) -> dict[str, Any]:
 @app.websocket("/ws/{code}")
 async def websocket_room(websocket: WebSocket, code: str) -> None:
     client_id = websocket.query_params.get("client_id", "").strip()
+    nickname = websocket.query_params.get("nickname", "")
     if not client_id:
         await websocket.close(code=1008, reason="client_id is required")
         return
@@ -135,6 +137,7 @@ async def websocket_room(websocket: WebSocket, code: str) -> None:
     async with room.lock:
         slot = room.slot_for(client_id)
         if slot is not None:
+            room.player_names[slot] = clean_nickname(nickname, PLAYER_NAMES[slot])
             room.connected[slot] = True
         room.sockets[client_id] = websocket
         if not room.started and all(room.player_ids):
@@ -232,3 +235,9 @@ def cleanup_rooms() -> None:
     for code in expired:
         rooms.pop(code, None)
 
+
+def clean_nickname(value: str, fallback: str) -> str:
+    nickname = " ".join(value.strip().split())
+    if not nickname:
+        return fallback
+    return nickname[:16]

@@ -37,6 +37,11 @@ button {
   color: inherit;
 }
 
+body:not(.in-room) .player-card {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .app {
   width: min(1040px, calc(100vw - 28px));
   margin: 0 auto;
@@ -171,7 +176,6 @@ button {
   font-size: 30px;
 }
 
-.exit-button,
 .room-panel button,
 .lobby button,
 .tray-action,
@@ -190,7 +194,7 @@ button {
 
 .lobby {
   width: min(560px, calc(100% - 40px));
-  margin: 48px auto 0;
+  margin: 78px auto 0;
   padding: 28px;
   border-radius: 24px;
   background: rgba(24, 15, 10, 0.62);
@@ -213,6 +217,16 @@ button {
   margin-top: 20px;
 }
 
+.nickname-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: #ffe8bd;
+  font-weight: 900;
+}
+
 .lobby form {
   display: flex;
   gap: 10px;
@@ -229,9 +243,17 @@ button {
   letter-spacing: 0.18em;
 }
 
+.nickname-row input {
+  letter-spacing: 0;
+}
+
 .status {
   min-height: 22px;
   color: #ffe2a1;
+}
+
+.status:empty {
+  display: none;
 }
 
 .game-shell {
@@ -239,8 +261,8 @@ button {
 }
 
 .room-panel {
-  width: min(570px, calc(100% - 40px));
-  margin: -2px auto 12px;
+  width: min(720px, calc(100% - 40px));
+  margin: 28px auto 12px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -264,7 +286,15 @@ button {
 
 #connection-status {
   margin: 0;
+  min-width: 190px;
   color: rgba(255, 238, 207, 0.72);
+  text-align: center;
+}
+
+.leave-room-button {
+  margin-left: 4px;
+  color: #fff3ec !important;
+  background: linear-gradient(180deg, #d66a59, #872d26) !important;
 }
 
 .board-wrap {
@@ -659,4 +689,3 @@ button:disabled,
     transform: scale(0.85);
   }
 }
-
