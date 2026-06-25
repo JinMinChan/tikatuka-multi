@@ -14,6 +14,20 @@ const state = {
   leaving: false,
 };
 
+const fx = {
+  seenEvents: new Set(),
+  rollingIds: new Set(),
+  popIds: new Set(),
+  flickingIds: new Set(),
+  shieldBlockIds: new Set(),
+  discardIds: new Set(),
+  flickFields: new Set(),
+  shieldFields: new Set(),
+  ghosts: [],
+  startBanner: null,
+  lockUntil: 0,
+};
+
 const els = {
   lobby: document.querySelector("#lobby"),
   gameShell: document.querySelector("#game-shell"),
@@ -29,6 +43,16 @@ const els = {
   restart: document.querySelector("#restart-button"),
   resultBanner: document.querySelector("#result-banner"),
   resultWinnerText: document.querySelector("#result-winner-text"),
+  startBanner: document.querySelector("#start-banner"),
+  startBannerText: document.querySelector("#start-banner-text"),
+  rolloffNames: [
+    document.querySelector("#rolloff-name-0"),
+    document.querySelector("#rolloff-name-1"),
+  ],
+  rolloffDice: [
+    document.querySelector("#rolloff-die-0"),
+    document.querySelector("#rolloff-die-1"),
+  ],
   eventLog: document.querySelector("#event-log"),
   playerNames: [
     document.querySelector("#player-name-0"),
@@ -74,6 +98,20 @@ function setRoomMode(inRoom) {
   els.gameShell.hidden = !inRoom;
 }
 
+function clearFx() {
+  fx.seenEvents.clear();
+  fx.rollingIds.clear();
+  fx.popIds.clear();
+  fx.flickingIds.clear();
+  fx.shieldBlockIds.clear();
+  fx.discardIds.clear();
+  fx.flickFields.clear();
+  fx.shieldFields.clear();
+  fx.ghosts = [];
+  fx.startBanner = null;
+  fx.lockUntil = 0;
+}
+
 function apiUrl(path) {
   return `${state.serverUrl}${path}`;
 }
@@ -106,6 +144,7 @@ function connectRoom(code) {
     return;
   }
   if (state.ws) state.ws.close();
+  clearFx();
   state.leaving = false;
   state.roomCode = roomCode;
   els.roomCode.textContent = roomCode;
@@ -157,6 +196,10 @@ function sendAction(action, payload = {}) {
     setStatus("아직 내 차례가 아닙니다.");
     return;
   }
+  if (isFxLocked()) {
+    setStatus("주사위 연출 중입니다.");
+    return;
+  }
   state.ws.send(JSON.stringify({ type: "action", action, ...payload }));
 }
 
@@ -168,6 +211,7 @@ function sendRestart() {
 function render() {
   const snapshot = state.snapshot;
   if (!snapshot) return;
+  processFx(snapshot);
   const { room, game, you } = snapshot;
   els.roomCode.textContent = room.code;
 
@@ -196,7 +240,143 @@ function render() {
   renderTrays(game, you);
   renderControls(room, game, you);
   renderResult(game, you);
+  renderStartBanner(room);
   renderLog(snapshot.log || []);
+}
+
+function processFx(snapshot) {
+  const events = [...(snapshot.log || [])].reverse();
+  for (const event of events) {
+    const key = eventKey(event);
+    if (fx.seenEvents.has(key)) continue;
+    fx.seenEvents.add(key);
+    triggerFx(event, snapshot);
+  }
+
+  if (fx.seenEvents.size > 240) {
+    fx.seenEvents = new Set([...fx.seenEvents].slice(-120));
+  }
+}
+
+function eventKey(event) {
+  return `${event.ts ?? ""}:${event.type}:${JSON.stringify(event)}`;
+}
+
+function triggerFx(event, snapshot) {
+  if (event.type === "first_player_rolloff") {
+    const duration = 2200;
+    fx.startBanner = {
+      rolls: event.rolls,
+      winner: event.winner,
+      until: Date.now() + duration,
+    };
+    lockFor(duration - 300);
+    window.setTimeout(render, duration);
+    return;
+  }
+
+  if (event.type === "die_rolled") {
+    pulseSet(fx.rollingIds, [event.die?.id], 720);
+    lockFor(520);
+    return;
+  }
+
+  if (event.type === "hand_trick") {
+    pulseSet(fx.popIds, [event.kept?.id], 360);
+    pulseSet(fx.rollingIds, [event.rerolled?.id], 720);
+    lockFor(520);
+    return;
+  }
+
+  if (event.type === "die_selected") {
+    pulseSet(
+      fx.discardIds,
+      (event.discarded || []).map((die) => die.id),
+      420,
+    );
+    lockFor(280);
+    return;
+  }
+
+  if (event.type === "hold") {
+    pulseSet(
+      fx.discardIds,
+      (event.discarded || []).map((die) => die.id),
+      420,
+    );
+    lockFor(280);
+    return;
+  }
+
+  if (event.type === "normal_die_placed") {
+    pulseSet(fx.popIds, [event.die?.id], 360);
+    return;
+  }
+
+  if (event.type === "bonus_die_placed") {
+    pulseSet(fx.popIds, [event.die?.id], 360);
+    return;
+  }
+
+  if (event.type === "egg_flick") {
+    const opponent = 1 - event.player;
+    addGhost(event.placedDie, event.player, event.field);
+    for (const die of event.opponentDiceRemoved || []) addGhost(die, opponent, event.field);
+    pulseSet(
+      fx.shieldBlockIds,
+      (event.shieldedDiceBlocked || []).map((die) => die.id),
+      760,
+    );
+    pulseSet(fx.rollingIds, [event.bonusDie?.id], 720);
+    pulseFields(fx.flickFields, [`${event.player}:${event.field}`, `${opponent}:${event.field}`], 700);
+    if ((event.shieldedDiceBlocked || []).length) {
+      pulseFields(fx.shieldFields, [`${opponent}:${event.field}`], 760);
+    }
+    lockFor(820);
+    return;
+  }
+
+  if (event.type === "shield_only_match") {
+    const opponent = 1 - event.player;
+    const ids = snapshot.game.boards[opponent][event.field]
+      .filter((die) => die.value === event.value && die.shield)
+      .map((die) => die.id);
+    pulseSet(fx.shieldBlockIds, ids, 760);
+    pulseFields(fx.shieldFields, [`${opponent}:${event.field}`], 760);
+    lockFor(480);
+  }
+}
+
+function pulseSet(set, ids, duration) {
+  const validIds = ids.filter((id) => id !== undefined && id !== null);
+  if (!validIds.length) return;
+  for (const id of validIds) set.add(id);
+  window.setTimeout(() => {
+    for (const id of validIds) set.delete(id);
+    render();
+  }, duration);
+}
+
+function pulseFields(set, keys, duration) {
+  for (const key of keys) set.add(key);
+  window.setTimeout(() => {
+    for (const key of keys) set.delete(key);
+    render();
+  }, duration);
+}
+
+function addGhost(die, player, field) {
+  if (!die) return;
+  const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  fx.ghosts.push({ key, die, player, field });
+  window.setTimeout(() => {
+    fx.ghosts = fx.ghosts.filter((ghost) => ghost.key !== key);
+    render();
+  }, 620);
+}
+
+function lockFor(duration) {
+  fx.lockUntil = Math.max(fx.lockUntil, Date.now() + duration);
 }
 
 function phaseText(game) {
@@ -224,8 +404,10 @@ function renderBoard(game) {
       );
       const logicalDice = game.boards[player][field];
       const visualDice = player === 0 ? [...logicalDice].reverse() : logicalDice;
-      fieldEl.innerHTML = renderFieldDice(visualDice);
+      fieldEl.innerHTML = renderFieldDice(visualDice) + renderGhostDice(player, field);
       fieldEl.classList.toggle("legal", isFieldLegal(player, field));
+      fieldEl.classList.toggle("flick-hit", fx.flickFields.has(`${player}:${field}`));
+      fieldEl.classList.toggle("shield-hit", fx.shieldFields.has(`${player}:${field}`));
     }
   }
 }
@@ -255,8 +437,16 @@ function renderControls(room, game, you) {
   for (let player = 0; player < 2; player += 1) {
     const isCurrent = room.started && you.player === player && game.currentPlayer === player;
     const canTrick =
-      isCurrent && game.phase === "place_normal" && !game.handTrickUsed[player] && !game.result;
-    const canHold = isCurrent && ["place_normal", "select_die"].includes(game.phase) && !game.result;
+      isCurrent &&
+      game.phase === "place_normal" &&
+      !game.handTrickUsed[player] &&
+      !game.result &&
+      !isFxLocked();
+    const canHold =
+      isCurrent &&
+      ["place_normal", "select_die"].includes(game.phase) &&
+      !game.result &&
+      !isFxLocked();
     els.trayControls[player].innerHTML = `
       <button class="tray-action" data-action="trick" data-player="${player}" ${
         canTrick ? "" : "disabled"
@@ -279,6 +469,29 @@ function renderResult(game, you) {
   els.resultBanner.hidden = false;
 }
 
+function renderStartBanner(room) {
+  const banner = fx.startBanner;
+  if (!banner || Date.now() > banner.until) {
+    els.startBanner.hidden = true;
+    return;
+  }
+
+  for (let player = 0; player < 2; player += 1) {
+    els.rolloffNames[player].textContent = room.players[player]?.name || DEFAULT_PLAYER_NAMES[player];
+    els.rolloffDice[player].innerHTML = renderDie(
+      {
+        id: `rolloff-${player}-${banner.rolls[player]}`,
+        value: banner.rolls[player],
+        shield: false,
+        owner: player,
+      },
+      { extraClasses: ["rolling"] },
+    );
+  }
+  els.startBannerText.textContent = `${playerName(banner.winner)} 선공!`;
+  els.startBanner.hidden = false;
+}
+
 function renderLog(log) {
   els.eventLog.innerHTML = log
     .slice(0, 10)
@@ -288,6 +501,9 @@ function renderLog(log) {
 
 function eventText(event) {
   if (event.type === "room_started") return "상대가 입장했습니다. 게임 시작!";
+  if (event.type === "first_player_rolloff") {
+    return `선공 결정 · ${playerName(0)} ${event.rolls[0]} : ${playerName(1)} ${event.rolls[1]} · ${playerName(event.winner)} 선공`;
+  }
   if (event.type === "die_rolled") {
     return `${playerName(event.player)} 자동 굴림 · ${dieText(event.die)}${
       event.openingShield ? " · 개막 실드" : ""
@@ -344,9 +560,14 @@ function isMyTurn() {
   return snapshot.you.player === snapshot.game.currentPlayer && snapshot.game.phase !== "game_over";
 }
 
+function isFxLocked() {
+  return Date.now() < fx.lockUntil;
+}
+
 function isFieldLegal(player, field) {
   const snapshot = state.snapshot;
   if (!snapshot || !isMyTurn()) return false;
+  if (isFxLocked()) return false;
   const { game } = snapshot;
   if (game.phase === "place_normal") {
     return player === game.currentPlayer && game.boards[player][field].length < 3;
@@ -379,11 +600,24 @@ function renderFieldDice(dice) {
   return parts.join("");
 }
 
+function renderGhostDice(player, field) {
+  return fx.ghosts
+    .filter((ghost) => ghost.player === player && ghost.field === field)
+    .map((ghost) => renderDie(ghost.die, { extraClasses: ["flicking"] }))
+    .join("");
+}
+
 function renderDie(die, options = {}) {
   const owner = die.owner ?? 0;
   const classes = ["die", `player-${owner}`];
+  if (options.extraClasses) classes.push(...options.extraClasses);
   if (die.shield) classes.push("shield");
   if (options.clickable) classes.push("clickable");
+  if (fx.rollingIds.has(die.id)) classes.push("rolling");
+  if (fx.popIds.has(die.id)) classes.push("pop");
+  if (fx.flickingIds.has(die.id)) classes.push("flicking");
+  if (fx.shieldBlockIds.has(die.id)) classes.push("shield-block");
+  if (fx.discardIds.has(die.id)) classes.push("discard");
   const attrs = [
     `class="${classes.join(" ")}"`,
     `data-die-id="${die.id}"`,
@@ -431,6 +665,7 @@ els.leave.addEventListener("click", () => {
   state.ws = null;
   state.snapshot = null;
   state.roomCode = null;
+  clearFx();
   setRoomMode(false);
   setStatus("로비로 돌아왔습니다.");
 });

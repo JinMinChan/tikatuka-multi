@@ -117,6 +117,21 @@ def test_opening_hand_trick_reroll_is_also_shield_and_avoids_same_value():
     assert all(d.shield for d in game.rolled_dice)
 
 
+def test_opening_shield_belongs_to_selected_first_player():
+    game = GameEngine()
+    game.rng = FixedRng([6])
+
+    game.set_first_player(1)
+    events = game.ensure_turn_ready()
+
+    assert game.current_player == 1
+    assert events[0]["player"] == 1
+    assert events[0]["die"]["shield"] is True
+    assert game.held_die is not None
+    assert game.held_die.owner == 1
+    assert game.held_die.shield is True
+
+
 def test_score_double_triple_and_tiebreak():
     assert GameEngine.score_field([die(1, 5), die(2, 5)]) == 15
     assert GameEngine.score_field([die(1, 5), die(2, 5), die(3, 5)]) == 25

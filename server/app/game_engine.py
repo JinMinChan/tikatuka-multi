@@ -38,6 +38,7 @@ class GameEngine:
         self.phase = "roll"
         self.hand_trick_used = [False, False]
         self.holding = [False, False]
+        self.opening_shield_player = 0
         self.opening_shield_pending = True
         self.rolled_dice: list[Die] = []
         self.held_die: Die | None = None
@@ -57,6 +58,14 @@ class GameEngine:
 
     def roll_value(self) -> int:
         return self.rng.randint(1, 6)
+
+    def set_first_player(self, player: int) -> None:
+        if player not in (0, 1):
+            raise ValueError("잘못된 선공 플레이어입니다.")
+        self.current_player = player
+        self.opening_shield_player = player
+        self.opening_shield_pending = True
+        self.phase = "roll"
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -84,7 +93,7 @@ class GameEngine:
             return events
 
         player = self.current_player
-        opening_shield = player == 0 and self.opening_shield_pending
+        opening_shield = player == self.opening_shield_player and self.opening_shield_pending
         die = self.make_die(shield=opening_shield, owner=player)
         self.rolled_dice = []
         self.held_die = die
@@ -221,6 +230,7 @@ class GameEngine:
                     "player": player,
                     "field": field,
                     "value": placed.value,
+                    "placedDie": placed.to_dict(),
                     "placedDieRemoved": True,
                     "opponentDiceRemoved": [die.to_dict() for die in removed],
                     "shieldedDiceBlocked": [die.to_dict() for die in blocked],
@@ -356,4 +366,3 @@ class GameEngine:
             "winner": winner,
             "usedTiebreak": used_tiebreak,
         }
-

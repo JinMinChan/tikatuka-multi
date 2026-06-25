@@ -25,6 +25,7 @@ class Room:
     connected: list[bool] = field(default_factory=lambda: [False, False])
     sockets: dict[str, WebSocket] = field(default_factory=dict)
     started: bool = False
+    rolloff: dict[str, Any] | None = None
     created_at: float = field(default_factory=time.time)
     updated_at: float = field(default_factory=time.time)
     log: list[dict[str, Any]] = field(default_factory=list)
@@ -70,6 +71,7 @@ class Room:
                 "code": self.code,
                 "started": self.started,
                 "players": self.public_players(),
+                "rolloff": self.rolloff,
                 "createdAt": self.created_at,
                 "updatedAt": self.updated_at,
             },
@@ -81,6 +83,36 @@ class Room:
             "game": self.game.snapshot(),
             "log": self.log,
         }
+
+    def start_game_events(self, include_reset: bool = False) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
+        if include_reset:
+            events.extend(self.game.reset())
+
+        rolls = [self.game.roll_value(), self.game.roll_value()]
+        rerolls = 0
+        while rolls[0] == rolls[1]:
+            rerolls += 1
+            rolls = [self.game.roll_value(), self.game.roll_value()]
+
+        winner = 0 if rolls[0] > rolls[1] else 1
+        self.game.set_first_player(winner)
+        self.rolloff = {
+            "rolls": rolls,
+            "winner": winner,
+            "rerolls": rerolls,
+            "ts": time.time(),
+        }
+        events.append(
+            {
+                "type": "first_player_rolloff",
+                "rolls": rolls,
+                "winner": winner,
+                "rerolls": rerolls,
+            }
+        )
+        events.extend(self.game.ensure_turn_ready())
+        return events
 
 
 app = FastAPI(title="TikaTuka Multiplayer", version="0.1.0")
@@ -143,7 +175,7 @@ async def websocket_room(websocket: WebSocket, code: str) -> None:
         if not room.started and all(room.player_ids):
             room.started = True
             room.add_events([{"type": "room_started"}])
-            room.add_events(room.game.ensure_turn_ready())
+            room.add_events(room.start_game_events())
         else:
             room.touch()
         await broadcast(room)
@@ -183,7 +215,7 @@ async def handle_message(room: Room, client_id: str, payload: dict[str, Any]) ->
             events = room.game.reset()
             room.started = all(room.player_ids)
             if room.started:
-                events.extend(room.game.ensure_turn_ready())
+                events.extend(room.start_game_events())
             room.add_events(events)
             await broadcast(room)
             return
