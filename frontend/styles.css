@@ -590,6 +590,17 @@ button:disabled,
   animation: shieldPulse 1.5s ease-in-out infinite;
 }
 
+.die.player-1.shield {
+  animation-name: redShieldPulse;
+  box-shadow:
+    0 0 0 2px rgba(255, 158, 143, 0.82),
+    0 0 22px rgba(255, 92, 83, 0.46),
+    inset -4px -5px 6px rgba(95, 66, 42, 0.25),
+    inset 4px 5px 7px rgba(255, 255, 255, 0.8),
+    0 4px 0 rgba(121, 52, 45, 0.82),
+    0 8px 14px rgba(0, 0, 0, 0.32);
+}
+
 .die::before {
   content: "";
   position: absolute;
@@ -613,6 +624,12 @@ button:disabled,
   color: #244c24;
   font-size: 12px;
   box-shadow: 0 0 12px rgba(135, 255, 157, 0.86);
+}
+
+.die.player-1.shield::after {
+  background: #ffb6aa;
+  color: #6f1e18;
+  box-shadow: 0 0 12px rgba(255, 120, 104, 0.86);
 }
 
 .die.rolling {
@@ -669,8 +686,29 @@ button:disabled,
   animation: strikeToLeft 620ms cubic-bezier(0.18, 0.78, 0.24, 1) forwards;
 }
 
+.strike-flyer-shell {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 8;
+  width: 46px;
+  height: 46px;
+  pointer-events: none;
+  transform-origin: center;
+  animation: strikeFly 820ms cubic-bezier(0.12, 0.76, 0.18, 1) forwards;
+  filter: drop-shadow(0 10px 12px rgba(0, 0, 0, 0.36));
+}
+
+.strike-flyer-shell .die {
+  animation: strikeFlySpin 820ms cubic-bezier(0.14, 0.78, 0.22, 1) forwards;
+}
+
 .die.shield-block {
   animation: shieldBlock 620ms ease-in-out;
+}
+
+.die.player-1.shield-block {
+  animation-name: redShieldBlock;
 }
 
 .die.discard {
@@ -778,6 +816,55 @@ button:disabled,
   color: #ffe4a4;
   font-size: 24px;
   font-weight: 950;
+}
+
+.audio-panel {
+  position: absolute;
+  z-index: 4;
+  left: 18px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 232, 178, 0.2);
+  border-radius: 999px;
+  background: rgba(22, 13, 8, 0.58);
+  box-shadow:
+    0 12px 24px rgba(0, 0, 0, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+body:not(.in-room) .audio-panel {
+  display: none;
+}
+
+.audio-panel button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #2b190d;
+  background: linear-gradient(#ffe19a, #e8ac4d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 3px 0 rgba(103, 58, 28, 0.62);
+}
+
+.audio-panel label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #f6d9a7;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.audio-panel input {
+  width: 92px;
+  accent-color: #ffd071;
 }
 
 .event-log {
@@ -980,6 +1067,52 @@ button:disabled,
   }
 }
 
+@keyframes strikeFly {
+  0% {
+    opacity: 0;
+    transform: translate(calc(var(--from-x) - 23px), calc(var(--from-y) - 23px)) scale(0.78);
+    filter: brightness(1) drop-shadow(0 8px 10px rgba(0, 0, 0, 0.28));
+  }
+  8% {
+    opacity: 1;
+    transform: translate(calc(var(--from-x) - 23px), calc(var(--from-y) - 23px)) scale(0.92);
+  }
+  42% {
+    opacity: 1;
+    transform: translate(calc(var(--mid-x) - 23px), calc(var(--mid-y) - 23px)) scale(1.08);
+    filter: brightness(1.18) drop-shadow(0 18px 16px rgba(0, 0, 0, 0.24));
+  }
+  70% {
+    opacity: 1;
+    transform: translate(calc(var(--to-x) - 23px), calc(var(--to-y) - 23px)) scale(1.16);
+    filter: brightness(1.34) drop-shadow(0 0 18px rgba(255, 166, 92, 0.56));
+  }
+  86% {
+    opacity: 0.9;
+    transform: translate(calc(var(--to-x) - 21px), calc(var(--to-y) - 29px)) scale(0.88);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--to-x) - 16px), calc(var(--to-y) - 42px)) scale(0.62);
+    filter: brightness(0.92) drop-shadow(0 0 0 rgba(0, 0, 0, 0));
+  }
+}
+
+@keyframes strikeFlySpin {
+  0% {
+    transform: rotate(-60deg);
+  }
+  42% {
+    transform: rotate(260deg);
+  }
+  70% {
+    transform: rotate(520deg);
+  }
+  100% {
+    transform: rotate(690deg);
+  }
+}
+
 @keyframes strikeToRight {
   0% {
     opacity: 1;
@@ -1050,6 +1183,16 @@ button:disabled,
   }
 }
 
+@keyframes redShieldPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 rgba(255, 121, 106, 0));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px rgba(255, 121, 106, 0.6));
+  }
+}
+
 @keyframes shieldBlock {
   0%,
   100% {
@@ -1059,6 +1202,21 @@ button:disabled,
   30% {
     transform: scale(1.16);
     filter: brightness(1.45) drop-shadow(0 0 16px rgba(146, 255, 188, 0.85));
+  }
+  60% {
+    transform: scale(0.96);
+  }
+}
+
+@keyframes redShieldBlock {
+  0%,
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  30% {
+    transform: scale(1.16);
+    filter: brightness(1.42) drop-shadow(0 0 16px rgba(255, 125, 108, 0.86));
   }
   60% {
     transform: scale(0.96);

@@ -1,5 +1,10 @@
 const DEFAULT_PLAYER_NAMES = ["FrangGabriel", "레온하트 네리아"];
 const FIELD_NAMES = ["TOP", "MIDDLE", "BOTTOM"];
+const SOUND_FILES = {
+  roll: "./sound_samples/roll.m4a",
+  place: "./sound_samples/place.m4a",
+  egg: "./sound_samples/egg.m4a",
+};
 
 const DEFAULT_SERVER =
   window.TIKATUKA_SERVER_URL ||
@@ -12,6 +17,13 @@ const state = {
   snapshot: null,
   roomCode: null,
   leaving: false,
+};
+
+const soundState = {
+  enabled: localStorage.getItem("tikatuka.soundEnabled") !== "false",
+  volume: Math.min(1, Math.max(0, Number(localStorage.getItem("tikatuka.soundVolume") || 0.72))),
+  unlocked: false,
+  pools: {},
 };
 
 const fx = {
@@ -61,6 +73,8 @@ const els = {
     document.querySelector("#player-name-0"),
     document.querySelector("#player-name-1"),
   ],
+  soundToggle: document.querySelector("#sound-toggle"),
+  soundVolume: document.querySelector("#sound-volume"),
   trayControls: [
     document.querySelector("#tray-controls-0"),
     document.querySelector("#tray-controls-1"),
@@ -101,6 +115,98 @@ function setRoomMode(inRoom) {
   els.gameShell.hidden = !inRoom;
 }
 
+function setupSound() {
+  soundState.pools = Object.fromEntries(
+    Object.entries(SOUND_FILES).map(([name, src]) => [
+      name,
+      Array.from({ length: 4 }, () => {
+        const audio = new Audio(src);
+        audio.preload = "auto";
+        audio.volume = effectiveSoundVolume();
+        return audio;
+      }),
+    ]),
+  );
+  renderSoundControls();
+}
+
+function effectiveSoundVolume() {
+  return soundState.enabled ? soundState.volume : 0;
+}
+
+function renderSoundControls() {
+  if (!els.soundToggle || !els.soundVolume) return;
+  els.soundVolume.value = String(Math.round(soundState.volume * 100));
+  els.soundToggle.textContent = soundState.enabled && soundState.volume > 0 ? "🔊" : "🔇";
+  els.soundToggle.setAttribute(
+    "aria-label",
+    soundState.enabled ? "효과음 끄기" : "효과음 켜기",
+  );
+  for (const pool of Object.values(soundState.pools)) {
+    for (const audio of pool) {
+      audio.volume = effectiveSoundVolume();
+    }
+  }
+}
+
+async function unlockSound() {
+  if (soundState.unlocked) return;
+  soundState.unlocked = true;
+  const warmups = Object.values(soundState.pools)
+    .map((pool) => pool[0])
+    .filter(Boolean)
+    .map(async (audio) => {
+      const previousMuted = audio.muted;
+      audio.muted = true;
+      try {
+        await audio.play();
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        // 브라우저가 아직 막으면 실제 게임 클릭 이후 다시 play()에서 시도한다.
+      } finally {
+        audio.muted = previousMuted;
+      }
+    });
+  await Promise.allSettled(warmups);
+}
+
+function setSoundEnabled(enabled) {
+  soundState.enabled = enabled;
+  localStorage.setItem("tikatuka.soundEnabled", String(enabled));
+  renderSoundControls();
+}
+
+function setSoundVolume(value) {
+  soundState.volume = Math.min(1, Math.max(0, Number(value) / 100));
+  if (soundState.volume > 0 && !soundState.enabled) {
+    soundState.enabled = true;
+    localStorage.setItem("tikatuka.soundEnabled", "true");
+  }
+  localStorage.setItem("tikatuka.soundVolume", String(soundState.volume));
+  renderSoundControls();
+}
+
+function isSoundAllowed() {
+  return document.body.classList.contains("in-room") && soundState.enabled && soundState.volume > 0;
+}
+
+function playSound(name, delay = 0) {
+  if (delay > 0) {
+    window.setTimeout(() => playSound(name), delay);
+    return;
+  }
+  if (!isSoundAllowed()) return;
+  const pool = soundState.pools[name] || [];
+  const audio = pool.find((item) => item.paused || item.ended) || pool[0]?.cloneNode(true);
+  if (!audio) return;
+  audio.volume = effectiveSoundVolume();
+  audio.currentTime = 0;
+  audio.play().catch(() => {
+    // 사용자가 아직 오디오를 허용하지 않은 상황이면 조용히 무시한다.
+  });
+}
+
 function clearFx() {
   fx.seenEvents.clear();
   fx.rollingIds.clear();
@@ -111,6 +217,7 @@ function clearFx() {
   fx.flickFields.clear();
   fx.shieldFields.clear();
   fx.ghosts = [];
+  document.querySelectorAll(".strike-flyer-shell").forEach((element) => element.remove());
   fx.startBanner = null;
   fx.rollDelayUntil = 0;
   fx.animatingUntil = 0;
@@ -134,6 +241,7 @@ function setStatus(message) {
 }
 
 async function createRoom() {
+  unlockSound();
   if (!getNickname()) return;
   setStatus("방 만드는 중...");
   const response = await fetch(apiUrl("/api/rooms"), { method: "POST" });
@@ -143,6 +251,7 @@ async function createRoom() {
 }
 
 async function connectRoom(code, options = {}) {
+  unlockSound();
   const nickname = getNickname();
   if (!nickname) return;
   const roomCode = String(code || "").replace(/\D/g, "").padStart(4, "0").slice(-4);
@@ -325,6 +434,7 @@ function triggerFx(event, snapshot) {
       until: Date.now() + duration,
     };
     fx.rollDelayUntil = fx.startBanner.until - 300;
+    playSound("roll");
     markAnimation(duration);
     lockFor(duration - 300);
     const bannerKey = fx.startBanner.key;
@@ -338,12 +448,14 @@ function triggerFx(event, snapshot) {
 
   if (event.type === "die_rolled") {
     const delay = Math.max(0, fx.rollDelayUntil - Date.now());
+    playSound("roll", delay);
     delayedPulseSet(fx.rollingIds, [event.die?.id], 720, delay);
     lockFor(delay + 520);
     return;
   }
 
   if (event.type === "hand_trick") {
+    playSound("roll");
     pulseSet(fx.popIds, [event.kept?.id], 360);
     pulseSet(fx.rollingIds, [event.rerolled?.id], 720);
     lockFor(520);
@@ -371,21 +483,21 @@ function triggerFx(event, snapshot) {
   }
 
   if (event.type === "normal_die_placed") {
+    if (!hasPairedEggFlick(event, snapshot)) playSound("place");
     pulseSet(fx.popIds, [event.die?.id], 360);
     return;
   }
 
   if (event.type === "bonus_die_placed") {
+    playSound("place");
     pulseSet(fx.popIds, [event.die?.id], 360);
     return;
   }
 
   if (event.type === "egg_flick") {
     const opponent = 1 - event.player;
-    addGhost(event.placedDie, event.player, event.field, [
-      "striking",
-      event.player === 0 ? "strike-right" : "strike-left",
-    ]);
+    playSound("egg");
+    addStrikeFlyer(event.placedDie, event.player, opponent, event.field, event.opponentDiceRemoved);
     for (const die of event.opponentDiceRemoved || []) {
       addGhost(die, opponent, event.field, ["victim-flick"]);
     }
@@ -409,9 +521,17 @@ function triggerFx(event, snapshot) {
       .filter((die) => die.value === event.value && die.shield)
       .map((die) => die.id);
     pulseSet(fx.shieldBlockIds, ids, 760);
-    pulseFields(fx.shieldFields, [`${opponent}:${event.field}`], 760);
     lockFor(480);
   }
+}
+
+function hasPairedEggFlick(event, snapshot) {
+  return (snapshot.log || []).some(
+    (candidate) =>
+      candidate.type === "egg_flick" &&
+      candidate.ts === event.ts &&
+      candidate.placedDie?.id === event.die?.id,
+  );
 }
 
 function pulseSet(set, ids, duration) {
@@ -454,6 +574,73 @@ function addGhost(die, player, field, extraClasses = ["flicking"]) {
     fx.ghosts = fx.ghosts.filter((ghost) => ghost.key !== key);
     scheduleFxRender();
   }, 620);
+}
+
+function addStrikeFlyer(die, player, opponent, field, removedDice = []) {
+  if (!die) return;
+  const table = document.querySelector(".table");
+  if (!table) return;
+
+  const tableRect = table.getBoundingClientRect();
+  const sourceRect = findStrikeSourceRect(player, die);
+  const targetRect = findStrikeTargetRect(opponent, field, removedDice);
+  if (!sourceRect || !targetRect) {
+    addGhost(die, player, field, [
+      "striking",
+      player === 0 ? "strike-right" : "strike-left",
+    ]);
+    return;
+  }
+
+  const fromX = sourceRect.left + sourceRect.width / 2 - tableRect.left;
+  const fromY = sourceRect.top + sourceRect.height / 2 - tableRect.top;
+  const toX = targetRect.left + targetRect.width / 2 - tableRect.left;
+  const toY = targetRect.top + targetRect.height / 2 - tableRect.top;
+  const midX = (fromX + toX) / 2;
+  const midY = Math.min(fromY, toY) - 92;
+  const duration = 820;
+
+  const shell = document.createElement("div");
+  shell.className = `strike-flyer-shell ${player === 0 ? "fly-right" : "fly-left"}`;
+  shell.style.setProperty("--from-x", `${fromX}px`);
+  shell.style.setProperty("--from-y", `${fromY}px`);
+  shell.style.setProperty("--mid-x", `${midX}px`);
+  shell.style.setProperty("--mid-y", `${midY}px`);
+  shell.style.setProperty("--to-x", `${toX}px`);
+  shell.style.setProperty("--to-y", `${toY}px`);
+  shell.innerHTML = renderDie(die, { extraClasses: ["strike-fly-die"] });
+  table.append(shell);
+
+  markAnimation(duration);
+  window.setTimeout(() => {
+    shell.remove();
+    scheduleFxRender();
+  }, duration);
+}
+
+function findStrikeSourceRect(player, die) {
+  const exactDie = document.querySelector(`#tray-${player} .die[data-die-id="${die.id}"]`);
+  if (exactDie) return exactDie.getBoundingClientRect();
+  const trayDie = document.querySelector(`#tray-${player} .die`);
+  if (trayDie) return trayDie.getBoundingClientRect();
+  const tray = document.querySelector(`#tray-${player}`);
+  return tray?.getBoundingClientRect() || null;
+}
+
+function findStrikeTargetRect(opponent, field, removedDice = []) {
+  for (const removed of removedDice || []) {
+    const exactDie = document.querySelector(
+      `.field[data-player="${opponent}"][data-field="${field}"] .die[data-die-id="${removed.id}"]`,
+    );
+    if (exactDie) return exactDie.getBoundingClientRect();
+  }
+  const matchingDie = document.querySelector(
+    `.field[data-player="${opponent}"][data-field="${field}"] .die`,
+  );
+  if (matchingDie) return matchingDie.getBoundingClientRect();
+  return document
+    .querySelector(`.field[data-player="${opponent}"][data-field="${field}"]`)
+    ?.getBoundingClientRect() || null;
 }
 
 function lockFor(duration) {
@@ -769,7 +956,20 @@ els.leave.addEventListener("click", () => {
 
 els.restart.addEventListener("click", sendRestart);
 
+els.soundToggle.addEventListener("click", () => {
+  unlockSound();
+  setSoundEnabled(!soundState.enabled || soundState.volume === 0);
+  if (soundState.volume === 0) setSoundVolume(72);
+});
+
+els.soundVolume.addEventListener("input", () => {
+  unlockSound();
+  setSoundVolume(els.soundVolume.value);
+});
+
 document.addEventListener("click", (event) => {
+  unlockSound();
+
   const actionButton = event.target.closest("[data-action]");
   if (actionButton) {
     const action = actionButton.dataset.action;
@@ -798,5 +998,6 @@ document.addEventListener("click", (event) => {
 });
 
 els.nicknameInput.value = localStorage.getItem("tikatuka.nickname") || "";
+setupSound();
 setRoomMode(false);
 setStatus("");
