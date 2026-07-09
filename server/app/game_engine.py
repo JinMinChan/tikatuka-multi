@@ -351,18 +351,36 @@ class GameEngine:
             sum(score[1] for score in field_scores),
         ]
         used_tiebreak = field_wins[0] == 1 and field_wins[1] == 1
+        tiebreak_scores: list[int | None] = [None, None]
+        tiebreak_margins: list[int | None] = [None, None]
+        if used_tiebreak:
+            for field, winner in enumerate(field_winners):
+                if winner in (0, 1):
+                    loser = 1 - winner
+                    tiebreak_scores[winner] = field_scores[field][winner]
+                    tiebreak_margins[winner] = (
+                        field_scores[field][winner] - field_scores[field][loser]
+                    )
+
         winner: int | None = None
         if field_wins[0] > field_wins[1]:
             winner = 0
         elif field_wins[1] > field_wins[0]:
             winner = 1
-        elif used_tiebreak and total_scores[0] != total_scores[1]:
-            winner = 0 if total_scores[0] > total_scores[1] else 1
+        elif (
+            used_tiebreak
+            and tiebreak_margins[0] is not None
+            and tiebreak_margins[1] is not None
+            and tiebreak_margins[0] != tiebreak_margins[1]
+        ):
+            winner = 0 if tiebreak_margins[0] > tiebreak_margins[1] else 1
         return {
             "fieldScores": field_scores,
             "fieldWinners": field_winners,
             "fieldWins": field_wins,
             "totalScores": total_scores,
+            "tiebreakScores": tiebreak_scores,
+            "tiebreakMargins": tiebreak_margins,
             "winner": winner,
             "usedTiebreak": used_tiebreak,
         }

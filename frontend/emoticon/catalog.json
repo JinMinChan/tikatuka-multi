@@ -1,0 +1,995 @@
+{
+  "version": "20260707-emoticon-catalog-1",
+  "slotCount": 6,
+  "defaultLoadout": [
+    "gogo",
+    "lol",
+    "sad",
+    "stop",
+    "what",
+    "whatwhat"
+  ],
+  "items": [
+    {
+      "id": "gogo",
+      "label": "가자",
+      "src": "./emoticon/gogo.png",
+      "pack": "기본",
+      "default": true
+    },
+    {
+      "id": "lol",
+      "label": "웃음",
+      "src": "./emoticon/lol.png",
+      "pack": "기본",
+      "default": true
+    },
+    {
+      "id": "sad",
+      "label": "슬픔",
+      "src": "./emoticon/sad.png",
+      "pack": "기본",
+      "default": true
+    },
+    {
+      "id": "stop",
+      "label": "멈춰",
+      "src": "./emoticon/stop.png",
+      "pack": "기본",
+      "default": true
+    },
+    {
+      "id": "what",
+      "label": "뭐야",
+      "src": "./emoticon/what.png",
+      "pack": "기본",
+      "default": true
+    },
+    {
+      "id": "whatwhat",
+      "label": "뭐뭐",
+      "src": "./emoticon/whatwhat.png",
+      "pack": "기본",
+      "default": true
+    },
+    {
+      "id": "mokoko_001",
+      "label": "모코코 001",
+      "src": "./emoticon/catalog/mokoko_001.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/001_i1728533254.png"
+    },
+    {
+      "id": "mokoko_002",
+      "label": "모코코 002",
+      "src": "./emoticon/catalog/mokoko_002.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/002_i1710119165.png"
+    },
+    {
+      "id": "mokoko_003",
+      "label": "모코코 003",
+      "src": "./emoticon/catalog/mokoko_003.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/003_i1115728759.png"
+    },
+    {
+      "id": "mokoko_004",
+      "label": "모코코 004",
+      "src": "./emoticon/catalog/mokoko_004.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/005_i1709352527.png"
+    },
+    {
+      "id": "mokoko_005",
+      "label": "모코코 005",
+      "src": "./emoticon/catalog/mokoko_005.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/006_i1295531696.png"
+    },
+    {
+      "id": "mokoko_006",
+      "label": "모코코 006",
+      "src": "./emoticon/catalog/mokoko_006.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/007_i1948782147.png"
+    },
+    {
+      "id": "mokoko_007",
+      "label": "모코코 007",
+      "src": "./emoticon/catalog/mokoko_007.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/008_i1646219219.png"
+    },
+    {
+      "id": "mokoko_008",
+      "label": "모코코 008",
+      "src": "./emoticon/catalog/mokoko_008.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/009_i1232615565.png"
+    },
+    {
+      "id": "mokoko_009",
+      "label": "모코코 009",
+      "src": "./emoticon/catalog/mokoko_009.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/010_i1604759016.png"
+    },
+    {
+      "id": "mokoko_010",
+      "label": "모코코 010",
+      "src": "./emoticon/catalog/mokoko_010.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/011_i1318954550.png"
+    },
+    {
+      "id": "mokoko_011",
+      "label": "모코코 011",
+      "src": "./emoticon/catalog/mokoko_011.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/013_i1621874105.png"
+    },
+    {
+      "id": "mokoko_012",
+      "label": "모코코 012",
+      "src": "./emoticon/catalog/mokoko_012.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/014_i1322710820.png"
+    },
+    {
+      "id": "mokoko_013",
+      "label": "모코코 013",
+      "src": "./emoticon/catalog/mokoko_013.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/015_i1628059973.png"
+    },
+    {
+      "id": "mokoko_014",
+      "label": "모코코 014",
+      "src": "./emoticon/catalog/mokoko_014.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/016_i1115049505.png"
+    },
+    {
+      "id": "mokoko_015",
+      "label": "모코코 015",
+      "src": "./emoticon/catalog/mokoko_015.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/017_i1481940646.png"
+    },
+    {
+      "id": "mokoko_016",
+      "label": "모코코 016",
+      "src": "./emoticon/catalog/mokoko_016.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/018_i1428742625.png"
+    },
+    {
+      "id": "mokoko_017",
+      "label": "모코코 017",
+      "src": "./emoticon/catalog/mokoko_017.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/019_i1113031860.png"
+    },
+    {
+      "id": "mokoko_018",
+      "label": "모코코 018",
+      "src": "./emoticon/catalog/mokoko_018.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/020_i1479199323.png"
+    },
+    {
+      "id": "mokoko_019",
+      "label": "모코코 019",
+      "src": "./emoticon/catalog/mokoko_019.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/021_i1595270111.png"
+    },
+    {
+      "id": "mokoko_020",
+      "label": "모코코 020",
+      "src": "./emoticon/catalog/mokoko_020.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/022_i1140449725.png"
+    },
+    {
+      "id": "mokoko_021",
+      "label": "모코코 021",
+      "src": "./emoticon/catalog/mokoko_021.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/023_i1953082296.png"
+    },
+    {
+      "id": "mokoko_022",
+      "label": "모코코 022",
+      "src": "./emoticon/catalog/mokoko_022.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/024_i1808373152.png"
+    },
+    {
+      "id": "mokoko_023",
+      "label": "모코코 023",
+      "src": "./emoticon/catalog/mokoko_023.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/025_i1697861304.png"
+    },
+    {
+      "id": "mokoko_024",
+      "label": "모코코 024",
+      "src": "./emoticon/catalog/mokoko_024.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/026_i1652508509.png"
+    },
+    {
+      "id": "mokoko_025",
+      "label": "모코코 025",
+      "src": "./emoticon/catalog/mokoko_025.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/027_i1804782095.png"
+    },
+    {
+      "id": "mokoko_026",
+      "label": "모코코 026",
+      "src": "./emoticon/catalog/mokoko_026.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/028_i1612734616.png"
+    },
+    {
+      "id": "mokoko_027",
+      "label": "모코코 027",
+      "src": "./emoticon/catalog/mokoko_027.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/029_i1573377344.png"
+    },
+    {
+      "id": "mokoko_028",
+      "label": "모코코 028",
+      "src": "./emoticon/catalog/mokoko_028.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/030_i1529390223.png"
+    },
+    {
+      "id": "mokoko_029",
+      "label": "모코코 029",
+      "src": "./emoticon/catalog/mokoko_029.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/031_i1336667616.png"
+    },
+    {
+      "id": "mokoko_030",
+      "label": "모코코 030",
+      "src": "./emoticon/catalog/mokoko_030.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/032_i1867089326.png"
+    },
+    {
+      "id": "mokoko_031",
+      "label": "모코코 031",
+      "src": "./emoticon/catalog/mokoko_031.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/033_i1209090666.png"
+    },
+    {
+      "id": "mokoko_032",
+      "label": "모코코 032",
+      "src": "./emoticon/catalog/mokoko_032.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/034_i1219826523.png"
+    },
+    {
+      "id": "mokoko_033",
+      "label": "모코코 033",
+      "src": "./emoticon/catalog/mokoko_033.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/035_i1634417616.png"
+    },
+    {
+      "id": "mokoko_034",
+      "label": "모코코 034",
+      "src": "./emoticon/catalog/mokoko_034.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/036_i1799287950.png"
+    },
+    {
+      "id": "mokoko_035",
+      "label": "모코코 035",
+      "src": "./emoticon/catalog/mokoko_035.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/037_i1168028741.png"
+    },
+    {
+      "id": "mokoko_036",
+      "label": "모코코 036",
+      "src": "./emoticon/catalog/mokoko_036.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/038_i1982021672.png"
+    },
+    {
+      "id": "mokoko_037",
+      "label": "모코코 037",
+      "src": "./emoticon/catalog/mokoko_037.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/039_i1270658816.png"
+    },
+    {
+      "id": "mokoko_038",
+      "label": "모코코 038",
+      "src": "./emoticon/catalog/mokoko_038.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/040_i1177827523.png"
+    },
+    {
+      "id": "mokoko_039",
+      "label": "모코코 039",
+      "src": "./emoticon/catalog/mokoko_039.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/041_i1872439490.png"
+    },
+    {
+      "id": "mokoko_040",
+      "label": "모코코 040",
+      "src": "./emoticon/catalog/mokoko_040.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/042_i1146502663.png"
+    },
+    {
+      "id": "mokoko_041",
+      "label": "모코코 041",
+      "src": "./emoticon/catalog/mokoko_041.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/043_i1923589066.png"
+    },
+    {
+      "id": "mokoko_042",
+      "label": "모코코 042",
+      "src": "./emoticon/catalog/mokoko_042.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/044_i1388351208.png"
+    },
+    {
+      "id": "mokoko_043",
+      "label": "모코코 043",
+      "src": "./emoticon/catalog/mokoko_043.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/045_i1832041176.png"
+    },
+    {
+      "id": "mokoko_044",
+      "label": "모코코 044",
+      "src": "./emoticon/catalog/mokoko_044.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/046_i1696190809.png"
+    },
+    {
+      "id": "mokoko_045",
+      "label": "모코코 045",
+      "src": "./emoticon/catalog/mokoko_045.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/047_i1288513219.png"
+    },
+    {
+      "id": "mokoko_046",
+      "label": "모코코 046",
+      "src": "./emoticon/catalog/mokoko_046.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/048_i1887913842.png"
+    },
+    {
+      "id": "mokoko_047",
+      "label": "모코코 047",
+      "src": "./emoticon/catalog/mokoko_047.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/049_i1620818168.png"
+    },
+    {
+      "id": "mokoko_048",
+      "label": "모코코 048",
+      "src": "./emoticon/catalog/mokoko_048.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/050_i1192667952.png"
+    },
+    {
+      "id": "mokoko_049",
+      "label": "모코코 049",
+      "src": "./emoticon/catalog/mokoko_049.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/051_i1995021847.png"
+    },
+    {
+      "id": "mokoko_050",
+      "label": "모코코 050",
+      "src": "./emoticon/catalog/mokoko_050.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/052_i1304111614.png"
+    },
+    {
+      "id": "mokoko_051",
+      "label": "모코코 051",
+      "src": "./emoticon/catalog/mokoko_051.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/053_i1502078124.png"
+    },
+    {
+      "id": "mokoko_052",
+      "label": "모코코 052",
+      "src": "./emoticon/catalog/mokoko_052.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/054_i1680443311.png"
+    },
+    {
+      "id": "mokoko_053",
+      "label": "모코코 053",
+      "src": "./emoticon/catalog/mokoko_053.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/055_i1582275310.png"
+    },
+    {
+      "id": "mokoko_054",
+      "label": "모코코 054",
+      "src": "./emoticon/catalog/mokoko_054.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/056_i1582786656.png"
+    },
+    {
+      "id": "mokoko_055",
+      "label": "모코코 055",
+      "src": "./emoticon/catalog/mokoko_055.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/057_i0589160278.png"
+    },
+    {
+      "id": "mokoko_056",
+      "label": "모코코 056",
+      "src": "./emoticon/catalog/mokoko_056.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/058_i1139256070.png"
+    },
+    {
+      "id": "mokoko_057",
+      "label": "모코코 057",
+      "src": "./emoticon/catalog/mokoko_057.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/059_i1289226054.png"
+    },
+    {
+      "id": "mokoko_058",
+      "label": "모코코 058",
+      "src": "./emoticon/catalog/mokoko_058.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/060_i1913235139.png"
+    },
+    {
+      "id": "mokoko_059",
+      "label": "모코코 059",
+      "src": "./emoticon/catalog/mokoko_059.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/062_i1492744178.png"
+    },
+    {
+      "id": "mokoko_060",
+      "label": "모코코 060",
+      "src": "./emoticon/catalog/mokoko_060.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/063_i1665251789.png"
+    },
+    {
+      "id": "mokoko_061",
+      "label": "모코코 061",
+      "src": "./emoticon/catalog/mokoko_061.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/064_i1130578925.png"
+    },
+    {
+      "id": "mokoko_062",
+      "label": "모코코 062",
+      "src": "./emoticon/catalog/mokoko_062.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/065_i1392074568.png"
+    },
+    {
+      "id": "mokoko_063",
+      "label": "모코코 063",
+      "src": "./emoticon/catalog/mokoko_063.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/066_i1366455287.png"
+    },
+    {
+      "id": "mokoko_064",
+      "label": "모코코 064",
+      "src": "./emoticon/catalog/mokoko_064.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/067_i1921853157.png"
+    },
+    {
+      "id": "mokoko_065",
+      "label": "모코코 065",
+      "src": "./emoticon/catalog/mokoko_065.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/068_i1485253848.png"
+    },
+    {
+      "id": "mokoko_066",
+      "label": "모코코 066",
+      "src": "./emoticon/catalog/mokoko_066.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/070_i1396142161.png"
+    },
+    {
+      "id": "mokoko_067",
+      "label": "모코코 067",
+      "src": "./emoticon/catalog/mokoko_067.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/071_i1575249317.png"
+    },
+    {
+      "id": "mokoko_068",
+      "label": "모코코 068",
+      "src": "./emoticon/catalog/mokoko_068.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/072_i1188955245.png"
+    },
+    {
+      "id": "mokoko_069",
+      "label": "모코코 069",
+      "src": "./emoticon/catalog/mokoko_069.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/073_i1942981768.png"
+    },
+    {
+      "id": "mokoko_070",
+      "label": "모코코 070",
+      "src": "./emoticon/catalog/mokoko_070.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/074_i1606006863.png"
+    },
+    {
+      "id": "mokoko_071",
+      "label": "모코코 071",
+      "src": "./emoticon/catalog/mokoko_071.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/076_i1260014614.png"
+    },
+    {
+      "id": "mokoko_072",
+      "label": "모코코 072",
+      "src": "./emoticon/catalog/mokoko_072.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/077_i1613776577.png"
+    },
+    {
+      "id": "mokoko_073",
+      "label": "모코코 073",
+      "src": "./emoticon/catalog/mokoko_073.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/078_i1656997684.png"
+    },
+    {
+      "id": "mokoko_074",
+      "label": "모코코 074",
+      "src": "./emoticon/catalog/mokoko_074.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/079_i1223003074.png"
+    },
+    {
+      "id": "mokoko_075",
+      "label": "모코코 075",
+      "src": "./emoticon/catalog/mokoko_075.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/080_i1368144817.png"
+    },
+    {
+      "id": "mokoko_076",
+      "label": "모코코 076",
+      "src": "./emoticon/catalog/mokoko_076.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/081_i1918973307.png"
+    },
+    {
+      "id": "mokoko_077",
+      "label": "모코코 077",
+      "src": "./emoticon/catalog/mokoko_077.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/082_i1847937102.png"
+    },
+    {
+      "id": "mokoko_078",
+      "label": "모코코 078",
+      "src": "./emoticon/catalog/mokoko_078.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/083_i1388081322.png"
+    },
+    {
+      "id": "mokoko_079",
+      "label": "모코코 079",
+      "src": "./emoticon/catalog/mokoko_079.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/084_i1626827071.png"
+    },
+    {
+      "id": "mokoko_080",
+      "label": "모코코 080",
+      "src": "./emoticon/catalog/mokoko_080.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/085_i1852913732.png"
+    },
+    {
+      "id": "mokoko_081",
+      "label": "모코코 081",
+      "src": "./emoticon/catalog/mokoko_081.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/086_i1949756881.png"
+    },
+    {
+      "id": "mokoko_082",
+      "label": "모코코 082",
+      "src": "./emoticon/catalog/mokoko_082.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/087_i1798010424.png"
+    },
+    {
+      "id": "mokoko_083",
+      "label": "모코코 083",
+      "src": "./emoticon/catalog/mokoko_083.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/088_i1828955287.png"
+    },
+    {
+      "id": "mokoko_084",
+      "label": "모코코 084",
+      "src": "./emoticon/catalog/mokoko_084.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/089_i1816751693.png"
+    },
+    {
+      "id": "mokoko_085",
+      "label": "모코코 085",
+      "src": "./emoticon/catalog/mokoko_085.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/090_i1973391629.png"
+    },
+    {
+      "id": "mokoko_086",
+      "label": "모코코 086",
+      "src": "./emoticon/catalog/mokoko_086.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/091_i1184583274.png"
+    },
+    {
+      "id": "mokoko_087",
+      "label": "모코코 087",
+      "src": "./emoticon/catalog/mokoko_087.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/092_i1876078827.png"
+    },
+    {
+      "id": "mokoko_088",
+      "label": "모코코 088",
+      "src": "./emoticon/catalog/mokoko_088.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/093_i1240039882.png"
+    },
+    {
+      "id": "mokoko_089",
+      "label": "모코코 089",
+      "src": "./emoticon/catalog/mokoko_089.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/094_i1873723286.png"
+    },
+    {
+      "id": "mokoko_090",
+      "label": "모코코 090",
+      "src": "./emoticon/catalog/mokoko_090.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/095_i1406391156.png"
+    },
+    {
+      "id": "mokoko_091",
+      "label": "모코코 091",
+      "src": "./emoticon/catalog/mokoko_091.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/096_i1422120211.png"
+    },
+    {
+      "id": "mokoko_092",
+      "label": "모코코 092",
+      "src": "./emoticon/catalog/mokoko_092.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/098_i1380333933.png"
+    },
+    {
+      "id": "mokoko_093",
+      "label": "모코코 093",
+      "src": "./emoticon/catalog/mokoko_093.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/099_i1697139253.png"
+    },
+    {
+      "id": "mokoko_094",
+      "label": "모코코 094",
+      "src": "./emoticon/catalog/mokoko_094.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/100_i1463603311.png"
+    },
+    {
+      "id": "mokoko_095",
+      "label": "모코코 095",
+      "src": "./emoticon/catalog/mokoko_095.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/101_i1147455934.png"
+    },
+    {
+      "id": "mokoko_096",
+      "label": "모코코 096",
+      "src": "./emoticon/catalog/mokoko_096.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/102_i1382963599.png"
+    },
+    {
+      "id": "mokoko_097",
+      "label": "모코코 097",
+      "src": "./emoticon/catalog/mokoko_097.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/103_i1818509299.png"
+    },
+    {
+      "id": "mokoko_098",
+      "label": "모코코 098",
+      "src": "./emoticon/catalog/mokoko_098.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/104_i0350710548.png"
+    },
+    {
+      "id": "mokoko_099",
+      "label": "모코코 099",
+      "src": "./emoticon/catalog/mokoko_099.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/105_i0676369817.png"
+    },
+    {
+      "id": "mokoko_100",
+      "label": "모코코 100",
+      "src": "./emoticon/catalog/mokoko_100.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/106_i1497468849.png"
+    },
+    {
+      "id": "mokoko_101",
+      "label": "모코코 101",
+      "src": "./emoticon/catalog/mokoko_101.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/107_i1917361184.png"
+    },
+    {
+      "id": "mokoko_102",
+      "label": "모코코 102",
+      "src": "./emoticon/catalog/mokoko_102.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/108_i1831584526.png"
+    },
+    {
+      "id": "mokoko_103",
+      "label": "모코코 103",
+      "src": "./emoticon/catalog/mokoko_103.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/109_i1783072826.png"
+    },
+    {
+      "id": "mokoko_104",
+      "label": "모코코 104",
+      "src": "./emoticon/catalog/mokoko_104.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/110_i1327359920.png"
+    },
+    {
+      "id": "mokoko_105",
+      "label": "모코코 105",
+      "src": "./emoticon/catalog/mokoko_105.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/111_i1894274256.png"
+    },
+    {
+      "id": "mokoko_106",
+      "label": "모코코 106",
+      "src": "./emoticon/catalog/mokoko_106.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/112_i1218619568.png"
+    },
+    {
+      "id": "mokoko_107",
+      "label": "모코코 107",
+      "src": "./emoticon/catalog/mokoko_107.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/113_i1470335321.png"
+    },
+    {
+      "id": "mokoko_108",
+      "label": "모코코 108",
+      "src": "./emoticon/catalog/mokoko_108.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/114_i1270680342.png"
+    },
+    {
+      "id": "mokoko_109",
+      "label": "모코코 109",
+      "src": "./emoticon/catalog/mokoko_109.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/115_i1355093294.png"
+    },
+    {
+      "id": "mokoko_110",
+      "label": "모코코 110",
+      "src": "./emoticon/catalog/mokoko_110.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/116_i1775034567.png"
+    },
+    {
+      "id": "mokoko_111",
+      "label": "모코코 111",
+      "src": "./emoticon/catalog/mokoko_111.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/117_i1203699192.png"
+    },
+    {
+      "id": "mokoko_112",
+      "label": "모코코 112",
+      "src": "./emoticon/catalog/mokoko_112.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/118_i1728073477.png"
+    },
+    {
+      "id": "mokoko_113",
+      "label": "모코코 113",
+      "src": "./emoticon/catalog/mokoko_113.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/119_i0718313004.png"
+    },
+    {
+      "id": "mokoko_114",
+      "label": "모코코 114",
+      "src": "./emoticon/catalog/mokoko_114.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/120_i0443603784.png"
+    },
+    {
+      "id": "mokoko_115",
+      "label": "모코코 115",
+      "src": "./emoticon/catalog/mokoko_115.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/121_i0366544449.png"
+    },
+    {
+      "id": "mokoko_116",
+      "label": "모코코 116",
+      "src": "./emoticon/catalog/mokoko_116.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/122_i0108861241.png"
+    },
+    {
+      "id": "mokoko_117",
+      "label": "모코코 117",
+      "src": "./emoticon/catalog/mokoko_117.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/123_i0896661716.png"
+    },
+    {
+      "id": "mokoko_118",
+      "label": "모코코 118",
+      "src": "./emoticon/catalog/mokoko_118.png",
+      "pack": "모코코",
+      "sourceFile": "22_roa_integrated_mokoko_japtangcon/124_i1709090300.png"
+    },
+    {
+      "id": "yoz_001",
+      "label": "요즈 001",
+      "src": "./emoticon/catalog/yoz_001.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/001_i0533876259.png"
+    },
+    {
+      "id": "yoz_002",
+      "label": "요즈 002",
+      "src": "./emoticon/catalog/yoz_002.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/002_i0522136651.png"
+    },
+    {
+      "id": "yoz_003",
+      "label": "요즈 003",
+      "src": "./emoticon/catalog/yoz_003.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/003_i0947598355.png"
+    },
+    {
+      "id": "yoz_004",
+      "label": "요즈 004",
+      "src": "./emoticon/catalog/yoz_004.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/004_i0667534428.png"
+    },
+    {
+      "id": "yoz_005",
+      "label": "요즈 005",
+      "src": "./emoticon/catalog/yoz_005.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/005_i0914893521.png"
+    },
+    {
+      "id": "yoz_006",
+      "label": "요즈 006",
+      "src": "./emoticon/catalog/yoz_006.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/006_i0780967144.png"
+    },
+    {
+      "id": "yoz_007",
+      "label": "요즈 007",
+      "src": "./emoticon/catalog/yoz_007.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/007_i0889586851.png"
+    },
+    {
+      "id": "yoz_008",
+      "label": "요즈 008",
+      "src": "./emoticon/catalog/yoz_008.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/008_i0738706304.png"
+    },
+    {
+      "id": "yoz_009",
+      "label": "요즈 009",
+      "src": "./emoticon/catalog/yoz_009.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/009_i0552917152.png"
+    },
+    {
+      "id": "yoz_010",
+      "label": "요즈 010",
+      "src": "./emoticon/catalog/yoz_010.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/010_i0115738277.png"
+    },
+    {
+      "id": "yoz_011",
+      "label": "요즈 011",
+      "src": "./emoticon/catalog/yoz_011.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/011_i0330674595.png"
+    },
+    {
+      "id": "yoz_012",
+      "label": "요즈 012",
+      "src": "./emoticon/catalog/yoz_012.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/012_i0905692042.png"
+    },
+    {
+      "id": "yoz_013",
+      "label": "요즈 013",
+      "src": "./emoticon/catalog/yoz_013.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/013_i0603872028.png"
+    },
+    {
+      "id": "yoz_014",
+      "label": "요즈 014",
+      "src": "./emoticon/catalog/yoz_014.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/014_i0650344800.png"
+    },
+    {
+      "id": "yoz_015",
+      "label": "요즈 015",
+      "src": "./emoticon/catalog/yoz_015.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/015_i0103716815.png"
+    },
+    {
+      "id": "yoz_016",
+      "label": "요즈 016",
+      "src": "./emoticon/catalog/yoz_016.png",
+      "pack": "요즈",
+      "sourceFile": "150_hamkkehaeyoz_con/016_i0292804649.png"
+    }
+  ],
+  "notes": "GIFs were converted to first-frame 100x100 PNG. Existing six defaults are not duplicated in catalog/."
+}
