@@ -46,6 +46,7 @@ const state = {
   lastTimeoutCheckAt: 0,
   emoticonPickerPlayer: null,
   waitingEmoticonPickerOpen: false,
+  streamerQueueOpen: false,
 };
 
 const soundState = {
@@ -137,10 +138,14 @@ const els = {
   streamerQueuePanel: document.querySelector("#streamer-queue-panel"),
   streamerQueueCount: document.querySelector("#streamer-queue-count"),
   streamerQueueList: document.querySelector("#streamer-queue-list"),
+  streamerQueueToggle: document.querySelector("#streamer-queue-toggle"),
+  streamerQueueToggleCount: document.querySelector("#streamer-queue-toggle-count"),
   waitingEmoticonControl: document.querySelector("#waiting-emoticon-control"),
   waitingEmoticonStage: document.querySelector("#waiting-emoticon-stage"),
   mobile: {
     roomCode: document.querySelector("#mobile-room-code"),
+    friendlyRecord: document.querySelector("#mobile-friendly-record"),
+    friendlyRecordScore: document.querySelector("#mobile-friendly-record-score"),
     opponentCard: document.querySelector("#mobile-opponent-card"),
     myCard: document.querySelector("#mobile-my-card"),
     opponentAvatar: document.querySelector("#mobile-opponent-avatar"),
@@ -202,7 +207,10 @@ function playerName(index) {
 
 function setRoomMode(inRoom) {
   document.body.classList.toggle("in-room", inRoom);
-  if (!inRoom) document.body.classList.remove("streamer-room");
+  if (!inRoom) {
+    document.body.classList.remove("streamer-room");
+    state.streamerQueueOpen = false;
+  }
   els.lobby.hidden = inRoom;
   els.gameShell.hidden = !inRoom;
   updateMobileStageScale();
@@ -709,7 +717,7 @@ function render() {
   const waitText = room.started
     ? phaseText(game)
     : room.streamerMode && room.players[1]?.occupied
-      ? "두 플레이어의 준비를 기다리는 중"
+      ? "방송인의 준비를 기다리는 중"
       : "상대 입장 대기 중";
   setStatus(
     state.leaveReserved && room.started && !game.result
@@ -744,18 +752,29 @@ function render() {
 }
 
 function renderFriendlyRecord(room) {
-  if (!els.friendlyRecord || !els.friendlyRecordScore) return;
-  const isFriendlyMatch =
-    !room.randomMatch && !room.streamerMode && Boolean(room.players?.[1]?.occupied);
-  els.friendlyRecord.hidden = !isFriendlyMatch;
-  if (!isFriendlyMatch) return;
+  const isFriendlyMatch = !room.randomMatch && Boolean(room.players?.[1]?.occupied);
   const score = Array.isArray(room.friendlyScore) ? room.friendlyScore : [0, 0];
-  els.friendlyRecordScore.textContent = `${Number(score[0]) || 0} : ${Number(score[1]) || 0}`;
+  const scoreText = `${Number(score[0]) || 0} : ${Number(score[1]) || 0}`;
+  for (const [record, scoreElement] of [
+    [els.friendlyRecord, els.friendlyRecordScore],
+    [els.mobile.friendlyRecord, els.mobile.friendlyRecordScore],
+  ]) {
+    if (!record || !scoreElement) continue;
+    record.hidden = !isFriendlyMatch;
+    if (isFriendlyMatch) scoreElement.textContent = scoreText;
+  }
 }
 
 function renderPlayerStateLine(room, roomPlayer) {
   const statsLine = renderPlayerStatLine(roomPlayer?.stats);
-  if (!room.streamerMode || room.started || !roomPlayer?.occupied) return statsLine;
+  if (
+    !room.streamerMode ||
+    room.started ||
+    !roomPlayer?.occupied ||
+    roomPlayer.index !== 0
+  ) {
+    return statsLine;
+  }
   const readyLine = roomPlayer.ready
     ? '<span class="ready-state">준비 완료</span>'
     : '<span class="waiting-state">준비 전</span>';
@@ -1245,13 +1264,19 @@ function renderTrays(game) {
 function renderControls(room, game, you) {
   for (let player = 0; player < 2; player += 1) {
     if (room.streamerMode && !room.started && !game.result) {
-      const roomPlayer = room.players[player];
-      const canReady = roomPlayer?.occupied && you.player === player && !roomPlayer.ready;
-      els.trayControls[player].innerHTML = roomPlayer?.occupied
+      const host = room.players[0];
+      const challenger = room.players[1];
+      const canReady =
+        player === 0 &&
+        you.player === 0 &&
+        host?.occupied &&
+        challenger?.occupied &&
+        challenger?.connected;
+      els.trayControls[player].innerHTML = player === 0 && you.player === 0
         ? `
-          <button class="tray-action ready-action ${roomPlayer.ready ? "is-ready" : ""}"
-            data-ready-player="${player}" ${canReady ? "" : "disabled"}>
-            ${roomPlayer.ready ? "준비 완료" : "준비"}
+          <button class="tray-action ready-action"
+            data-ready-player="0" ${canReady ? "" : "disabled"}>
+            준비
           </button>
         `
         : "";
@@ -1310,11 +1335,28 @@ function renderStreamerQueue(room, you) {
   if (!els.streamerQueuePanel) return;
   if (!room.streamerMode) {
     els.streamerQueuePanel.hidden = true;
+    els.streamerQueuePanel.classList.remove("is-mobile-open");
+    if (els.streamerQueueToggle) els.streamerQueueToggle.hidden = true;
+    state.streamerQueueOpen = false;
     return;
   }
 
   const waitingPlayers = room.waitingPlayers || [];
   els.streamerQueueCount.textContent = `${waitingPlayers.length}/${room.queueLimit || 0}`;
+  if (els.streamerQueueToggle && els.streamerQueueToggleCount) {
+    els.streamerQueueToggle.hidden = false;
+    els.streamerQueueToggleCount.textContent = String(waitingPlayers.length);
+    els.streamerQueueToggle.setAttribute(
+      "aria-expanded",
+      state.streamerQueueOpen ? "true" : "false",
+    );
+    els.streamerQueueToggle.setAttribute(
+      "aria-label",
+      state.streamerQueueOpen
+        ? "대기자 목록 닫기"
+        : `대기자 ${waitingPlayers.length}명 목록 열기`,
+    );
+  }
   els.streamerQueueList.innerHTML = waitingPlayers.length
     ? waitingPlayers
         .map(
@@ -1350,6 +1392,7 @@ function renderStreamerQueue(room, you) {
       </div>
     `
     : "";
+  els.streamerQueuePanel.classList.toggle("is-mobile-open", state.streamerQueueOpen);
   els.streamerQueuePanel.hidden = false;
 }
 
@@ -1581,7 +1624,10 @@ function renderMobileTray(room, game, you, me) {
   }
 
   if (!room.started) {
-    els.mobile.tray.textContent = "상대 입장 대기 중";
+    els.mobile.tray.textContent =
+      room.streamerMode && room.players[1]?.occupied
+        ? "방송인의 준비 대기 중"
+        : "상대 입장 대기 중";
     return;
   }
   if (game.result) {
@@ -1595,13 +1641,14 @@ function renderMobileTray(room, game, you, me) {
 function renderMobileActions(room, game, you, me) {
   if (!els.mobile.actionRow) return;
   if (room.streamerMode && !room.started && !game.result) {
-    const roomPlayer = room.players[me];
-    const canReady = roomPlayer?.occupied && you.player === me && !roomPlayer.ready;
-    els.mobile.actionRow.innerHTML = roomPlayer?.occupied
+    const challenger = room.players[1];
+    const canReady =
+      you.player === 0 && challenger?.occupied && challenger?.connected;
+    els.mobile.actionRow.innerHTML = you.player === 0
       ? `
-        <button class="tray-action ready-action ${roomPlayer.ready ? "is-ready" : ""}"
-          data-ready-player="${me}" ${canReady ? "" : "disabled"}>
-          ${roomPlayer.ready ? "준비 완료" : "준비"}
+        <button class="tray-action ready-action"
+          data-ready-player="0" ${canReady ? "" : "disabled"}>
+          준비
         </button>
       `
       : "";
@@ -2081,6 +2128,13 @@ els.soundVolume.addEventListener("input", () => {
 
 document.addEventListener("click", (event) => {
   unlockSound();
+
+  const streamerQueueToggle = event.target.closest("[data-streamer-queue-toggle]");
+  if (streamerQueueToggle) {
+    state.streamerQueueOpen = !state.streamerQueueOpen;
+    requestRender();
+    return;
+  }
 
   const waitingEmoticonChoice = event.target.closest("[data-waiting-emoticon-id]");
   if (waitingEmoticonChoice) {

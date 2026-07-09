@@ -169,6 +169,13 @@ ws://127.0.0.1:8000/ws/{code}?client_id={clientId}&nickname={nickname}
 {"type": "restart"}
 ```
 
+방송인 모드에서는 1P 방송인만 다음 메시지를 보내면 현재 도전자와 게임이
+시작된다. 2P 도전자는 준비 메시지를 보낼 필요가 없으며 서버도 이를 거부한다.
+
+```json
+{"type": "ready"}
+```
+
 ## 6. 최소 봇 루프
 
 개발 의존성을 설치하면 `websockets`를 사용할 수 있다.

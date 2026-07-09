@@ -446,10 +446,13 @@ def test_streamer_room_waiters_watch_running_game_and_queue_is_limited():
             challenger_snapshot = challenger.receive_json()
             assert challenger_snapshot["room"]["started"] is False
 
-            host.send_json({"type": "ready"})
-            receive_snapshot(host, lambda payload: payload["room"]["players"][0]["ready"])
-            receive_snapshot(challenger, lambda payload: payload["room"]["players"][0]["ready"])
             challenger.send_json({"type": "ready"})
+            denied = challenger.receive_json()
+            assert denied["type"] == "error"
+            assert "방송인만" in denied["message"]
+            assert room.started is False
+
+            host.send_json({"type": "ready"})
             receive_snapshot(host, lambda payload: payload["room"]["started"])
             receive_snapshot(challenger, lambda payload: payload["room"]["started"])
 
@@ -509,6 +512,7 @@ def test_streamer_kick_promotes_first_waiter_and_resets_ready_state():
                 receive_snapshot(waiter, lambda payload: payload["you"]["queuePosition"] == 1)
                 room.ready_players.update({"host", "challenger"})
                 room.rematch_votes.update({"host", "challenger"})
+                room.friendly_wins = [2, 1]
                 room.started = True
                 room.game.result = {"winner": 0}
                 room.game.phase = "game_over"
@@ -530,6 +534,7 @@ def test_streamer_kick_promotes_first_waiter_and_resets_ready_state():
                 assert promoted["game"]["result"] is None
                 assert host_after["room"]["waitingPlayers"] == []
                 assert host_after["room"]["rematchVotes"] == 0
+                assert host_after["room"]["friendlyScore"] == [0, 0]
                 assert room.ready_players == set()
 
 
@@ -857,14 +862,22 @@ def test_manual_room_score_accumulates_once_across_rematches():
     assert room.friendly_wins == [1, 1]
 
 
-def test_streamer_room_does_not_record_friendly_score():
+def test_streamer_room_records_current_challenger_score_once():
     room = Room(code="8888", streamer_mode=True, queue_limit=3)
     room.player_ids = ["host", "challenger"]
     room.game.result = {"winner": 0}
 
     apply_ranked_result(room)
+    apply_ranked_result(room)
 
-    assert room.friendly_wins == [0, 0]
+    assert room.friendly_wins == [1, 0]
+
+    room.game.rng = FixedRng([6, 1, 4])
+    room.start_game_events(include_reset=True)
+    room.game.result = {"winner": 1}
+    apply_ranked_result(room)
+
+    assert room.friendly_wins == [1, 1]
 
 
 def test_status_payload_includes_top_twenty_leaderboard():

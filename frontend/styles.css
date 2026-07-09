@@ -692,6 +692,10 @@ body.in-room .lobby-my-rating {
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
 }
 
+.streamer-queue-toggle {
+  display: none;
+}
+
 .streamer-queue-panel[hidden] {
   display: none;
 }
@@ -1579,6 +1583,27 @@ body:not(.in-room) .audio-panel {
   text-align: center;
   font-size: 11px;
   font-weight: 950;
+}
+
+.mobile-friendly-record {
+  position: absolute;
+  z-index: 4;
+  top: 76px;
+  left: 18px;
+  min-width: 74px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 229, 176, 0.2);
+  border-radius: 999px;
+  color: #ffe38e;
+  background: rgba(24, 13, 8, 0.72);
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18);
+  text-align: center;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.mobile-friendly-record[hidden] {
+  display: none;
 }
 
 .mobile-my-card {
@@ -2697,14 +2722,48 @@ body:not(.in-room) .audio-panel {
     display: none;
   }
 
+  body.in-room .streamer-queue-toggle {
+    position: fixed;
+    z-index: 26;
+    top: 92px;
+    right: 8px;
+    min-width: 58px;
+    min-height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border: 1px solid rgba(255, 232, 178, 0.28);
+    border-radius: 999px;
+    color: #ffe9bd;
+    background: rgba(24, 15, 10, 0.9);
+    box-shadow: 0 9px 20px rgba(0, 0, 0, 0.3);
+    font-size: 15px;
+  }
+
+  body.in-room .streamer-queue-toggle[hidden] {
+    display: none;
+  }
+
+  body.in-room .streamer-queue-toggle strong {
+    color: #ffe09a;
+    font-size: 13px;
+  }
+
   body.in-room .streamer-queue-panel {
     position: fixed;
     z-index: 25;
-    top: 92px;
+    top: 136px;
     right: 8px;
     width: 158px;
     max-height: 190px;
+    display: none;
     padding: 9px;
+  }
+
+  body.in-room .streamer-queue-panel.is-mobile-open {
+    display: block;
   }
 
   body.in-room .streamer-queue-panel ol {

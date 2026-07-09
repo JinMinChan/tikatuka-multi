@@ -721,20 +721,18 @@ async def handle_message(room: Room, client_id: str, payload: dict[str, Any]) ->
             if not room.streamer_mode:
                 await send_error(room, client_id, "방송인 모드에서만 준비할 수 있습니다.")
                 return
+            if slot != 0:
+                await send_error(room, client_id, "방송인만 게임을 시작할 수 있습니다.")
+                return
             if room.started or room.game.result:
                 await send_error(room, client_id, "지금은 준비할 수 없습니다.")
                 return
             if not all(room.player_ids) or not all(room.connected):
                 await send_error(room, client_id, "상대가 입장할 때까지 기다려주세요.")
                 return
-            room.ready_players.add(client_id)
-            needed_players = set(room.occupied_player_ids())
-            if len(needed_players) == 2 and needed_players.issubset(room.ready_players):
-                room.started = True
-                room.add_events([{"type": "room_started"}])
-                room.add_events(room.start_game_events())
-            else:
-                room.touch()
+            room.started = True
+            room.add_events([{"type": "room_started"}])
+            room.add_events(room.start_game_events())
             await broadcast(room)
             return
 
@@ -891,6 +889,8 @@ def advance_streamer_queue(room: Room) -> None:
         room.player_names[1] = promoted_name
         room.connected[1] = promoted_id in room.sockets
 
+    room.friendly_wins = [0, 0]
+    room.friendly_result_recorded = False
     reset_room_round(room)
     room.add_events(
         [
@@ -1200,7 +1200,6 @@ def stats_payload(client_id: str | None) -> dict[str, Any]:
 def apply_ranked_result(room: Room) -> None:
     if (
         not room.random_match
-        and not room.streamer_mode
         and not room.friendly_result_recorded
         and room.game.result
     ):

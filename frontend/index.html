@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>티카투카 멀티</title>
-    <link rel="stylesheet" href="./styles.css?v=20260628-3" />
+    <link rel="stylesheet" href="./styles.css?v=20260628-4" />
   </head>
   <body>
     <main class="app">
@@ -123,6 +123,19 @@
             <strong id="start-banner-text">선공!</strong>
           </section>
 
+          <button
+            class="streamer-queue-toggle"
+            id="streamer-queue-toggle"
+            type="button"
+            data-streamer-queue-toggle
+            aria-expanded="false"
+            aria-label="대기자 목록 열기"
+            hidden
+          >
+            <span aria-hidden="true">👥</span>
+            <strong id="streamer-queue-toggle-count">0</strong>
+          </button>
+
           <aside class="streamer-queue-panel" id="streamer-queue-panel" hidden>
             <h3>대기자 <span id="streamer-queue-count">0/0</span></h3>
             <ol id="streamer-queue-list"></ol>
@@ -226,6 +239,14 @@
             </article>
 
             <div class="mobile-room-code" id="mobile-room-code">방 번호 ----</div>
+            <div
+              class="mobile-friendly-record"
+              id="mobile-friendly-record"
+              aria-label="현재 상대 전적"
+              hidden
+            >
+              <span id="mobile-friendly-record-score">0 : 0</span>
+            </div>
 
             <section class="mobile-board-section mobile-stack-section">
               <div class="mobile-board-grid mobile-opponent-grid" id="mobile-opponent-board"></div>
@@ -290,6 +311,6 @@
       </section>
     </main>
 
-    <script src="./app.js?v=20260628-3"></script>
+    <script src="./app.js?v=20260628-4"></script>
   </body>
 </html>
