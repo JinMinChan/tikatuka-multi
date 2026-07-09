@@ -3713,7 +3713,7 @@ document.addEventListener("click", (event) => {
     return;
   }
 
-  const boardSkinButton = event.target.closest("[data-board-skin]");
+  const boardSkinButton = event.target.closest(".customize-board-skins button[data-board-skin]");
   if (boardSkinButton) {
     applyBoardSkin(boardSkinButton.dataset.boardSkin, { persist: true });
     setStatus(`보드판 스킨: ${boardSkinButton.textContent.trim()}`);
