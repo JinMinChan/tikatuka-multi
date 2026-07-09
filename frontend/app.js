@@ -5,17 +5,49 @@ const SOUND_FILES = {
   egg: "./sound_samples/egg.m4a",
 };
 
-const IS_MOBILE_DEMO = new URLSearchParams(window.location.search).get("demo") === "mobile";
+const DEMO_MODE = new URLSearchParams(window.location.search).get("demo");
+const CUSTOMIZE_PREVIEW_TAB = new URLSearchParams(window.location.search).get("customize");
+const IS_MOBILE_DEMO = DEMO_MODE === "mobile";
+const IS_TIER_DEMO = DEMO_MODE === "tier";
+const IS_TIER_LOBBY_DEMO = DEMO_MODE === "tier-lobby";
+const IS_TOURNAMENT_DEMO = DEMO_MODE === "tournament";
 const MOBILE_STAGE_WIDTH = 390;
 const MOBILE_STAGE_HEIGHT = 844;
-const EMOTICONS = [
-  { id: "gogo", label: "가자" },
-  { id: "lol", label: "웃음" },
-  { id: "sad", label: "슬픔" },
-  { id: "stop", label: "멈춰" },
-  { id: "what", label: "뭐야" },
-  { id: "whatwhat", label: "뭐뭐" },
+const DEFAULT_EMOTICONS = [
+  { id: "gogo", label: "가자", src: "./emoticon/gogo.png", pack: "기본" },
+  { id: "lol", label: "웃음", src: "./emoticon/lol.png", pack: "기본" },
+  { id: "sad", label: "슬픔", src: "./emoticon/sad.png", pack: "기본" },
+  { id: "stop", label: "멈춰", src: "./emoticon/stop.png", pack: "기본" },
+  { id: "what", label: "뭐야", src: "./emoticon/what.png", pack: "기본" },
+  { id: "whatwhat", label: "뭐뭐", src: "./emoticon/whatwhat.png", pack: "기본" },
 ];
+const DEFAULT_EMOTICON_LOADOUT = DEFAULT_EMOTICONS.map((item) => item.id);
+const EMOTICON_SLOT_COUNT = 6;
+const BOARD_SKINS = [
+  { id: "premium-wood", label: "우드" },
+  { id: "casino-felt", label: "펠트" },
+  { id: "neon-arcade", label: "네온" },
+  { id: "pastel-cafe", label: "파스텔" },
+  { id: "ice-crystal", label: "아이스" },
+  { id: "dancheong-festival", label: "단청" },
+];
+const DEFAULT_BOARD_SKIN = "premium-wood";
+const TITLE_CLASS_TOKEN = /^[a-z0-9-]+$/;
+const TIER_LABELS = {
+  bronze: "브론즈",
+  silver: "실버",
+  gold: "골드",
+  platinum: "플레티넘",
+  diamond: "다이아",
+  master: "마스터",
+};
+const TIER_GRADE_LABELS = {
+  1: "I",
+  2: "II",
+  3: "III",
+  4: "IV",
+  5: "V",
+};
 
 const IS_LOCAL_STATIC_SERVER =
   ["localhost", "127.0.0.1"].includes(window.location.hostname) &&
@@ -27,6 +59,16 @@ const DEFAULT_SERVER =
     : IS_LOCAL_STATIC_SERVER
       ? "http://127.0.0.1:8000"
       : window.location.origin);
+const CLIENT_ID_STORAGE_KEY = "tikatuka.clientId";
+const NICKNAME_STORAGE_KEY = "tikatuka.nickname";
+const BOARD_SKIN_STORAGE_KEY = "tikatuka.boardSkin";
+const EMOTICON_LOADOUT_STORAGE_KEY = "tikatuka.emoticonLoadout";
+const CLIENT_ID_MIGRATION_VERSION = "20260701-http-to-https";
+const CLIENT_ID_MIGRATION_DONE_KEY = "tikatuka.clientIdMigrationDone";
+const CLIENT_ID_MIGRATION_ATTEMPT_KEY = "tikatuka.clientIdMigrationAttempted";
+
+applyClientIdMigrationFromHash();
+bridgeClientIdBetweenHttpAndHttps();
 
 const state = {
   serverUrl: DEFAULT_SERVER.replace(/\/$/, ""),
@@ -47,6 +89,21 @@ const state = {
   emoticonPickerPlayer: null,
   waitingEmoticonPickerOpen: false,
   streamerQueueOpen: false,
+  tournamentSetupOpen: false,
+  tournamentHostParticipates: null,
+  tournamentSize: null,
+  tournamentTargetWins: null,
+  tournamentManualSlots: [],
+  tournamentManualKey: "",
+  tournamentPickedId: null,
+  tournamentDraggedId: null,
+  boardSkin: initialBoardSkin(),
+  customizeOpen: false,
+  customizeTab: "board",
+  customizeSelectedSlot: 0,
+  emoticonCatalog: [...DEFAULT_EMOTICONS],
+  emoticonLoadout: initialEmoticonLoadout(),
+  emoticonDraftLoadout: initialEmoticonLoadout(),
 };
 
 const soundState = {
@@ -69,6 +126,10 @@ const fx = {
   shieldFields: new Set(),
   ghosts: [],
   startBanner: null,
+  tournamentSeedUntil: 0,
+  tournamentStartUntil: 0,
+  tournamentAdvanceUntil: 0,
+  tournamentChampionUntil: 0,
   rollDelayUntil: 0,
   animatingUntil: 0,
   lockUntil: 0,
@@ -81,12 +142,26 @@ const els = {
   lobbyStatus: document.querySelector("#lobby-status"),
   onlineUsers: document.querySelector("#online-users"),
   myRating: document.querySelector("#my-rating"),
+  titleCabinet: document.querySelector("#title-cabinet"),
+  titleList: document.querySelector("#title-list"),
+  titleUnequip: document.querySelector("#title-unequip-button"),
+  boardSkinOptions: document.querySelector("#board-skin-options"),
+  customizeOpen: document.querySelector("#customize-button"),
+  customizeModal: document.querySelector("#customize-modal"),
+  customizeTabs: document.querySelectorAll("[data-customize-tab]"),
+  customizePanes: document.querySelectorAll("[data-customize-pane]"),
+  customizeEmoticonSlots: document.querySelector("#customize-emoticon-slots"),
+  customizeEmoticonCatalog: document.querySelector("#customize-emoticon-catalog"),
+  customizeEmoticonCount: document.querySelector("#customize-emoticon-count"),
   leaderboard: document.querySelector("#leaderboard"),
   nicknameInput: document.querySelector("#nickname-input"),
   randomMatch: document.querySelector("#random-match-button"),
   createRoom: document.querySelector("#create-room-button"),
   createStreamerRoom: document.querySelector("#create-streamer-room-button"),
+  createTournamentRoom: document.querySelector("#create-tournament-room-button"),
+  createTournamentConfirm: document.querySelector("#create-tournament-confirm-button"),
   streamerQueueLimit: document.querySelector("#streamer-queue-limit"),
+  tournamentSetup: document.querySelector("#tournament-setup"),
   joinForm: document.querySelector("#join-form"),
   roomCodeInput: document.querySelector("#room-code-input"),
   roomCode: document.querySelector("#room-code"),
@@ -95,6 +170,7 @@ const els = {
   friendlyRecord: document.querySelector("#friendly-record"),
   friendlyRecordScore: document.querySelector("#friendly-record-score"),
   leave: document.querySelector("#leave-button"),
+  surrender: document.querySelector("#surrender-button"),
   restart: document.querySelector("#restart-button"),
   kickOpponent: document.querySelector("#kick-opponent-button"),
   resultBanner: document.querySelector("#result-banner"),
@@ -142,6 +218,15 @@ const els = {
   streamerQueueToggleCount: document.querySelector("#streamer-queue-toggle-count"),
   waitingEmoticonControl: document.querySelector("#waiting-emoticon-control"),
   waitingEmoticonStage: document.querySelector("#waiting-emoticon-stage"),
+  tournamentPanel: document.querySelector("#tournament-panel"),
+  tournamentSummary: document.querySelector("#tournament-summary"),
+  tournamentStateText: document.querySelector("#tournament-state-text"),
+  tournamentVersus: document.querySelector("#tournament-versus"),
+  tournamentHostName: document.querySelector("#tournament-host-name"),
+  tournamentParticipantCount: document.querySelector("#tournament-participant-count"),
+  tournamentParticipantList: document.querySelector("#tournament-participant-list"),
+  tournamentBracket: document.querySelector("#tournament-bracket"),
+  tournamentControls: document.querySelector("#tournament-controls"),
   mobile: {
     roomCode: document.querySelector("#mobile-room-code"),
     friendlyRecord: document.querySelector("#mobile-friendly-record"),
@@ -168,6 +253,7 @@ const els = {
     opponentTurnClockPanel: document.querySelector("#mobile-opponent-turn-clock-panel"),
     opponentTotalClockPanel: document.querySelector("#mobile-opponent-total-clock-panel"),
     leave: document.querySelector("#mobile-leave-button"),
+    surrender: document.querySelector("#mobile-surrender-button"),
     resultBanner: document.querySelector("#mobile-result-banner"),
     resultWinnerText: document.querySelector("#mobile-result-winner-text"),
     restart: document.querySelector("#mobile-restart-button"),
@@ -178,14 +264,237 @@ const els = {
 };
 
 function getClientId() {
-  const key = "tikatuka.clientId";
-  const existing = localStorage.getItem(key);
+  const existing = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
   if (existing) return existing;
   const created =
     crypto.randomUUID?.() ||
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
-  localStorage.setItem(key, created);
+  localStorage.setItem(CLIENT_ID_STORAGE_KEY, created);
   return created;
+}
+
+function normalizeBoardSkinId(value) {
+  const skinId = String(value || "").trim();
+  return BOARD_SKINS.some((skin) => skin.id === skinId) ? skinId : DEFAULT_BOARD_SKIN;
+}
+
+function initialBoardSkin() {
+  const querySkin = new URLSearchParams(window.location.search).get("skin");
+  return normalizeBoardSkinId(querySkin || localStorage.getItem(BOARD_SKIN_STORAGE_KEY));
+}
+
+function initialEmoticonLoadout() {
+  const fallback = [...DEFAULT_EMOTICON_LOADOUT];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(EMOTICON_LOADOUT_STORAGE_KEY) || "[]");
+    if (!Array.isArray(parsed)) return fallback;
+    const sanitized = [];
+    for (const id of parsed) {
+      const cleanId = String(id || "").trim();
+      if (!/^[a-z0-9_-]{1,40}$/.test(cleanId) || sanitized.includes(cleanId)) continue;
+      sanitized.push(cleanId);
+      if (sanitized.length >= EMOTICON_SLOT_COUNT) break;
+    }
+    return sanitized.length ? sanitized : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function applyBoardSkin(skinId, options = {}) {
+  const normalized = normalizeBoardSkinId(skinId);
+  state.boardSkin = normalized;
+  document.body.dataset.boardSkin = normalized;
+  if (options.persist) {
+    localStorage.setItem(BOARD_SKIN_STORAGE_KEY, normalized);
+  }
+  renderBoardSkinOptions();
+}
+
+function renderBoardSkinOptions() {
+  document
+    .querySelectorAll("[data-board-skin]")
+    .forEach((button) => {
+      const selected = button.dataset.boardSkin === state.boardSkin;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+}
+
+function catalogItems() {
+  return state.emoticonCatalog?.length ? state.emoticonCatalog : DEFAULT_EMOTICONS;
+}
+
+function catalogMap() {
+  return new Map(catalogItems().map((item) => [item.id, item]));
+}
+
+function normalizeEmoticonLoadout(loadout, catalog = catalogItems()) {
+  const allowed = new Set(catalog.map((item) => item.id));
+  const normalized = [];
+  for (const id of loadout || []) {
+    const cleanId = String(id || "").trim();
+    if (!allowed.has(cleanId) || normalized.includes(cleanId)) continue;
+    normalized.push(cleanId);
+    if (normalized.length >= EMOTICON_SLOT_COUNT) break;
+  }
+  for (const id of DEFAULT_EMOTICON_LOADOUT) {
+    if (!allowed.has(id) || normalized.includes(id)) continue;
+    normalized.push(id);
+    if (normalized.length >= EMOTICON_SLOT_COUNT) break;
+  }
+  for (const item of catalog) {
+    if (normalized.includes(item.id)) continue;
+    normalized.push(item.id);
+    if (normalized.length >= EMOTICON_SLOT_COUNT) break;
+  }
+  return normalized.slice(0, EMOTICON_SLOT_COUNT);
+}
+
+function loadoutItems(loadout = state.emoticonLoadout) {
+  const map = catalogMap();
+  return normalizeEmoticonLoadout(loadout).map((id) => map.get(id)).filter(Boolean);
+}
+
+function findEmoticon(emoticon) {
+  return catalogMap().get(String(emoticon || "").trim()) || null;
+}
+
+async function loadEmoticonCatalog() {
+  try {
+    const response = await fetch("./emoticon/catalog.json?v=20260707-emoticon-catalog-1", {
+      cache: "no-cache",
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const data = await response.json();
+    const items = Array.isArray(data.items)
+      ? data.items
+          .map((item) => ({
+            id: String(item.id || "").trim(),
+            label: String(item.label || item.id || "").trim(),
+            src: String(item.src || "").trim(),
+            pack: String(item.pack || "기타").trim(),
+          }))
+          .filter((item) => item.id && item.src)
+      : [];
+    if (items.length >= DEFAULT_EMOTICONS.length) {
+      state.emoticonCatalog = items;
+      state.emoticonLoadout = normalizeEmoticonLoadout(state.emoticonLoadout, items);
+      state.emoticonDraftLoadout = normalizeEmoticonLoadout(state.emoticonLoadout, items);
+    }
+  } catch {
+    state.emoticonCatalog = [...DEFAULT_EMOTICONS];
+    state.emoticonLoadout = normalizeEmoticonLoadout(state.emoticonLoadout, state.emoticonCatalog);
+    state.emoticonDraftLoadout = [...state.emoticonLoadout];
+  }
+  renderCustomize();
+  requestRender();
+}
+
+function shouldRunClientIdMigration() {
+  return (
+    !IS_MOBILE_DEMO &&
+    !IS_TIER_DEMO &&
+    !IS_TIER_LOBBY_DEMO &&
+    window.location.hostname === "tikatuka.duckdns.org"
+  );
+}
+
+function isValidClientId(value) {
+  return /^[a-zA-Z0-9_-]{6,120}$/.test(String(value || ""));
+}
+
+function normalizedStoredNickname(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 16);
+}
+
+function applyClientIdMigrationFromHash() {
+  if (!shouldRunClientIdMigration()) return false;
+  const rawHash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+  if (!rawHash) return false;
+  const params = new URLSearchParams(rawHash);
+  const migratedClientId = params.get("tikatuka_client_id");
+  const migratedNickname = normalizedStoredNickname(params.get("tikatuka_nickname"));
+  const missingClientId = params.get("tikatuka_client_id_missing");
+  let changed = false;
+
+  if (isValidClientId(migratedClientId)) {
+    localStorage.setItem(CLIENT_ID_STORAGE_KEY, migratedClientId);
+    localStorage.setItem(CLIENT_ID_MIGRATION_DONE_KEY, CLIENT_ID_MIGRATION_VERSION);
+    params.delete("tikatuka_client_id");
+    changed = true;
+  } else if (missingClientId) {
+    localStorage.setItem(CLIENT_ID_MIGRATION_DONE_KEY, CLIENT_ID_MIGRATION_VERSION);
+    params.delete("tikatuka_client_id_missing");
+    changed = true;
+  }
+  if (migratedNickname) {
+    localStorage.setItem(NICKNAME_STORAGE_KEY, migratedNickname);
+    params.delete("tikatuka_nickname");
+    changed = true;
+  }
+
+  if (changed) {
+    const nextHash = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ""}`,
+    );
+  }
+  return changed;
+}
+
+function bridgeClientIdBetweenHttpAndHttps() {
+  if (!shouldRunClientIdMigration()) return;
+  const url = new URL(window.location.href);
+  const isMigrationHop = url.searchParams.get("client_id_migrate") === "1";
+
+  if (window.location.protocol === "http:") {
+    const clientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+    const nickname = normalizedStoredNickname(localStorage.getItem(NICKNAME_STORAGE_KEY));
+    const target = new URL(window.location.href);
+    target.protocol = "https:";
+    target.searchParams.delete("client_id_migrate");
+    target.searchParams.delete("_");
+    const hashParams = new URLSearchParams();
+    if (isValidClientId(clientId)) {
+      hashParams.set("tikatuka_client_id", clientId);
+    } else {
+      hashParams.set("tikatuka_client_id_missing", "1");
+    }
+    if (nickname) {
+      hashParams.set("tikatuka_nickname", nickname);
+    }
+    target.hash = hashParams.toString();
+    localStorage.setItem(CLIENT_ID_MIGRATION_DONE_KEY, CLIENT_ID_MIGRATION_VERSION);
+    window.location.replace(target.toString());
+    return;
+  }
+
+  if (window.location.protocol !== "https:") return;
+  if (isMigrationHop) {
+    url.searchParams.delete("client_id_migrate");
+    url.searchParams.delete("_");
+    localStorage.setItem(CLIENT_ID_MIGRATION_DONE_KEY, CLIENT_ID_MIGRATION_VERSION);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    return;
+  }
+  if (localStorage.getItem(CLIENT_ID_MIGRATION_DONE_KEY) === CLIENT_ID_MIGRATION_VERSION) return;
+  if (sessionStorage.getItem(CLIENT_ID_MIGRATION_ATTEMPT_KEY) === CLIENT_ID_MIGRATION_VERSION) return;
+  sessionStorage.setItem(CLIENT_ID_MIGRATION_ATTEMPT_KEY, CLIENT_ID_MIGRATION_VERSION);
+
+  const target = new URL(window.location.href);
+  target.protocol = "http:";
+  target.searchParams.set("client_id_migrate", "1");
+  target.searchParams.set("_", Date.now().toString(36));
+  target.hash = "";
+  window.location.replace(target.toString());
 }
 
 function getNickname() {
@@ -196,7 +505,7 @@ function getNickname() {
     return null;
   }
   const clipped = nickname.slice(0, 16);
-  localStorage.setItem("tikatuka.nickname", clipped);
+  localStorage.setItem(NICKNAME_STORAGE_KEY, clipped);
   els.nicknameInput.value = clipped;
   return clipped;
 }
@@ -209,10 +518,16 @@ function setRoomMode(inRoom) {
   document.body.classList.toggle("in-room", inRoom);
   if (!inRoom) {
     document.body.classList.remove("streamer-room");
+    document.body.classList.remove("tournament-room");
     state.streamerQueueOpen = false;
+    state.tournamentSetupOpen = false;
+    state.tournamentManualSlots = [];
+    state.tournamentManualKey = "";
+    state.tournamentPickedId = null;
   }
   els.lobby.hidden = inRoom;
   els.gameShell.hidden = !inRoom;
+  if (!inRoom) renderTournamentSetupControls();
   updateMobileStageScale();
 }
 
@@ -361,10 +676,17 @@ function clearFx() {
   document.querySelectorAll(".strike-flyer-shell").forEach((element) => element.remove());
   document.querySelectorAll(".emoticon-burst").forEach((element) => element.remove());
   document.querySelectorAll(".waiting-emoticon-burst").forEach((element) => element.remove());
+  document.querySelectorAll(".tournament-seed-flyer").forEach((element) => element.remove());
+  document.querySelectorAll(".tournament-advance-flyer").forEach((element) => element.remove());
+  document.querySelectorAll(".tournament-champion-burst").forEach((element) => element.remove());
   document
     .querySelectorAll(".mobile-player-card.has-emoticon")
     .forEach((element) => element.classList.remove("has-emoticon"));
   fx.startBanner = null;
+  fx.tournamentSeedUntil = 0;
+  fx.tournamentStartUntil = 0;
+  fx.tournamentAdvanceUntil = 0;
+  fx.tournamentChampionUntil = 0;
   fx.rollDelayUntil = 0;
   fx.animatingUntil = 0;
   fx.lockUntil = 0;
@@ -401,7 +723,7 @@ async function createStreamerRoom() {
   unlockSound();
   if (!getNickname()) return;
   const queueLimit = Number(els.streamerQueueLimit?.value || 1);
-  setStatus("방송인 모드 방 만드는 중...");
+  setStatus("스트리머 모드 방 만드는 중...");
   const response = await fetch(apiUrl("/api/streamer-rooms"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -409,6 +731,35 @@ async function createStreamerRoom() {
       queueLimit,
       clientId: state.clientId,
       nickname: els.nicknameInput.value,
+    }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const data = await response.json();
+  await connectRoom(data.code, { skipCheck: true });
+}
+
+async function createTournamentRoom() {
+  unlockSound();
+  const nickname = getNickname();
+  if (!nickname) return;
+  if (!isTournamentSetupComplete()) {
+    setStatus("토너먼트 설정을 모두 선택해주세요.");
+    renderTournamentSetupControls();
+    return;
+  }
+  const size = state.tournamentSize;
+  const targetWins = state.tournamentTargetWins;
+  const hostParticipates = state.tournamentHostParticipates;
+  setStatus("토너먼트 방 만드는 중...");
+  const response = await fetch(apiUrl("/api/tournament-rooms"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientId: state.clientId,
+      nickname,
+      size,
+      targetWins,
+      hostParticipates,
     }),
   });
   if (!response.ok) throw new Error(await response.text());
@@ -531,29 +882,323 @@ async function refreshStatus() {
   }
 }
 
+async function equipTitle(titleId) {
+  if (!titleId) return;
+  setStatus("칭호 장착 중...");
+  const response = await fetch(apiUrl("/api/titles/equip"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientId: state.clientId,
+      titleId,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || "칭호를 장착할 수 없습니다.");
+  }
+  state.status = await response.json();
+  renderLobbyStatus();
+  setStatus("칭호를 장착했습니다.");
+}
+
+async function unequipTitle() {
+  setStatus("칭호 장착 해제 중...");
+  const response = await fetch(apiUrl("/api/titles/unequip"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientId: state.clientId,
+    }),
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail || "칭호를 해제할 수 없습니다.");
+  }
+  state.status = await response.json();
+  renderLobbyStatus();
+  setStatus("칭호 장착을 해제했습니다.");
+}
+
 function renderLobbyStatus() {
   const onlineUsers = state.status?.onlineUsers ?? 0;
   const stats = state.status?.stats || { score: 0, wins: 0, losses: 0, streak: 0 };
+  const lobbyStats = {
+    ...stats,
+    tier: stats.tier || { tier: "bronze", grade: 5, stars: 0 },
+  };
   const leaderboard = state.status?.leaderboard || [];
   els.onlineUsers.textContent = `접속 ${onlineUsers}명`;
   els.myRating.innerHTML = `
-    <strong>${stats.score}점</strong>
-    <span>${stats.wins}승 / ${stats.losses}패</span>
+    <div class="lobby-tier-header">
+      <span>내 티어</span>
+      <span class="tier-help-wrap">
+        <button class="tier-help-button" type="button" aria-label="티어 시스템 설명">?</button>
+        <span class="tier-help-tooltip" role="tooltip">
+          <strong>티어 시스템</strong>
+          <span>브론즈→실버→골드→플레티넘→다이아→마스터</span>
+          <span>승리 +1별, 패배 -1별 · 등급 강등 없음</span>
+          <span>3연승부터 +2별, 5연승부터 +3별</span>
+          <span>내가 낮은 티어면 패배해도 별 보호</span>
+          <span>마스터는 100점 시작 · 승리 +10~15점, 패배 -10점</span>
+        </span>
+      </span>
+    </div>
+    <div class="lobby-tier-main">
+      ${tierBadge(lobbyStats)}
+      <span class="lobby-tier-record">${stats.wins}승 / ${stats.losses}패</span>
+    </div>
+    <small>${lobbyStreakText(stats)}</small>
   `;
+  renderTitleCabinet(stats);
   els.leaderboard.innerHTML = leaderboard.length
     ? leaderboard
-        .map(
-          (entry, index) => `
+        .map((entry, index) => {
+          const entryName = escapeHtml(entry.name || "플레이어");
+          return `
             <li class="${entry.clientId === state.clientId ? "is-me" : ""}">
               <span class="rank-no">${index + 1}</span>
-              <strong>${escapeHtml(entry.name || "플레이어")}</strong>
-              <em>${entry.score}점</em>
+              <strong title="${entryName}">${entryName}</strong>
+              <em>${tierBadge(entry) || `${entry.score}점`}</em>
               <small>${entry.wins}승/${entry.losses}패</small>
             </li>
-          `,
-        )
+          `;
+        })
         .join("")
     : `<li class="empty-ranking">아직 랭킹 기록이 없습니다.</li>`;
+}
+
+function lobbyStreakText(stats) {
+  if (stats.streak > 0) return `${stats.streak}연승 중`;
+  if (stats.streak < 0) return `${Math.abs(stats.streak)}연패 중`;
+  return "연승 기록 없음";
+}
+
+function openCustomize(tab = state.customizeTab || "board") {
+  state.customizeOpen = true;
+  state.emoticonDraftLoadout = normalizeEmoticonLoadout(state.emoticonLoadout);
+  state.customizeSelectedSlot = Math.min(
+    Math.max(0, state.customizeSelectedSlot || 0),
+    EMOTICON_SLOT_COUNT - 1,
+  );
+  setCustomizeTab(tab);
+  renderCustomize();
+}
+
+function closeCustomize() {
+  state.customizeOpen = false;
+  if (els.customizeModal) els.customizeModal.hidden = true;
+}
+
+function setCustomizeTab(tab) {
+  state.customizeTab = tab === "emoticon" ? "emoticon" : "board";
+  renderCustomize();
+}
+
+function renderCustomize() {
+  if (!els.customizeModal) return;
+  els.customizeModal.hidden = !state.customizeOpen;
+  els.customizeTabs?.forEach((button) => {
+    const selected = button.dataset.customizeTab === state.customizeTab;
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+  });
+  els.customizePanes?.forEach((pane) => {
+    pane.hidden = pane.dataset.customizePane !== state.customizeTab;
+  });
+  renderBoardSkinOptions();
+  renderCustomizeEmoticons();
+}
+
+function renderCustomizeEmoticons() {
+  if (!els.customizeEmoticonSlots || !els.customizeEmoticonCatalog) return;
+  const map = catalogMap();
+  const draft = normalizeEmoticonLoadout(state.emoticonDraftLoadout);
+  state.emoticonDraftLoadout = draft;
+  if (state.customizeSelectedSlot >= draft.length) state.customizeSelectedSlot = 0;
+  const equipped = new Set(draft);
+  els.customizeEmoticonSlots.innerHTML = draft
+    .map((id, index) => {
+      const item = map.get(id) || DEFAULT_EMOTICONS[index] || DEFAULT_EMOTICONS[0];
+      return `
+        <button
+          type="button"
+          class="customize-emoticon-slot ${index === state.customizeSelectedSlot ? "is-selected" : ""}"
+          data-customize-emoticon-slot="${index}"
+          aria-pressed="${index === state.customizeSelectedSlot ? "true" : "false"}"
+          title="${escapeHtml(item.label)}"
+        >
+          <span>${index + 1}</span>
+          <img src="${escapeHtml(item.src)}" alt="" draggable="false" />
+        </button>
+      `;
+    })
+    .join("");
+
+  const items = catalogItems();
+  if (els.customizeEmoticonCount) {
+    els.customizeEmoticonCount.textContent = `${items.length}개`;
+  }
+  els.customizeEmoticonCatalog.innerHTML = items
+    .map((item) => {
+      const isEquipped = equipped.has(item.id);
+      const isActive = draft[state.customizeSelectedSlot] === item.id;
+      return `
+        <button
+          type="button"
+          class="customize-emoticon-option ${isEquipped ? "is-equipped" : ""} ${isActive ? "is-active" : ""}"
+          data-customize-emoticon-id="${escapeHtml(item.id)}"
+          draggable="true"
+          title="${escapeHtml(`${item.pack || "기타"} · ${item.label}`)}"
+        >
+          <img src="${escapeHtml(item.src)}" alt="" loading="lazy" draggable="false" />
+        </button>
+      `;
+    })
+    .join("");
+}
+
+function setDraftEmoticonSlot(slotIndex, emoticonId) {
+  const map = catalogMap();
+  const slot = Math.min(Math.max(0, Number(slotIndex) || 0), EMOTICON_SLOT_COUNT - 1);
+  if (!map.has(emoticonId)) return;
+  const draft = normalizeEmoticonLoadout(state.emoticonDraftLoadout);
+  const previousIndex = draft.indexOf(emoticonId);
+  if (previousIndex >= 0 && previousIndex !== slot) {
+    draft[previousIndex] = draft[slot];
+  }
+  draft[slot] = emoticonId;
+  state.emoticonDraftLoadout = normalizeEmoticonLoadout(draft);
+  state.customizeSelectedSlot = Math.min(slot + 1, EMOTICON_SLOT_COUNT - 1);
+  renderCustomizeEmoticons();
+}
+
+function saveEmoticonLoadout() {
+  state.emoticonLoadout = normalizeEmoticonLoadout(state.emoticonDraftLoadout);
+  localStorage.setItem(EMOTICON_LOADOUT_STORAGE_KEY, JSON.stringify(state.emoticonLoadout));
+  state.emoticonPickerPlayer = null;
+  state.waitingEmoticonPickerOpen = false;
+  closeCustomize();
+  setStatus("이모티콘 설정을 저장했습니다.");
+  requestRender();
+}
+
+function resetDraftEmoticonLoadout() {
+  state.emoticonDraftLoadout = normalizeEmoticonLoadout(DEFAULT_EMOTICON_LOADOUT);
+  state.customizeSelectedSlot = 0;
+  renderCustomizeEmoticons();
+}
+
+function normalizeTournamentSize(value) {
+  return [4, 8, 16].includes(Number(value)) ? Number(value) : 4;
+}
+
+function normalizeTournamentTargetWins(value) {
+  return [1, 2, 3].includes(Number(value)) ? Number(value) : 1;
+}
+
+function normalizeTournamentHostParticipates(value) {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return null;
+}
+
+function isTournamentSetupComplete() {
+  return (
+    state.tournamentHostParticipates !== null &&
+    [4, 8, 16].includes(Number(state.tournamentSize)) &&
+    [1, 2, 3].includes(Number(state.tournamentTargetWins))
+  );
+}
+
+function tournamentFormatText(targetWins) {
+  if (Number(targetWins) === 2) return "3판2선승";
+  if (Number(targetWins) === 3) return "5판3선승";
+  return "단판";
+}
+
+function setTournamentSize(size) {
+  state.tournamentSize = normalizeTournamentSize(size);
+  renderTournamentSetupControls();
+}
+
+function setTournamentTargetWins(targetWins) {
+  state.tournamentTargetWins = normalizeTournamentTargetWins(targetWins);
+  renderTournamentSetupControls();
+}
+
+function setTournamentHostParticipates(value) {
+  state.tournamentHostParticipates = normalizeTournamentHostParticipates(value);
+  renderTournamentSetupControls();
+}
+
+function renderTournamentSetupControls() {
+  if (els.tournamentSetup) {
+    els.tournamentSetup.hidden = !state.tournamentSetupOpen;
+  }
+  if (els.createTournamentRoom) {
+    els.createTournamentRoom.setAttribute(
+      "aria-expanded",
+      state.tournamentSetupOpen ? "true" : "false",
+    );
+  }
+  document.querySelectorAll("[data-tournament-size]").forEach((button) => {
+    button.classList.toggle(
+      "is-selected",
+      Number(button.dataset.tournamentSize) === state.tournamentSize,
+    );
+  });
+  document.querySelectorAll("[data-tournament-target-wins]").forEach((button) => {
+    button.classList.toggle(
+      "is-selected",
+      Number(button.dataset.tournamentTargetWins) === state.tournamentTargetWins,
+    );
+  });
+  document.querySelectorAll("[data-tournament-host-participates]").forEach((button) => {
+    button.classList.toggle(
+      "is-selected",
+      normalizeTournamentHostParticipates(button.dataset.tournamentHostParticipates) ===
+        state.tournamentHostParticipates,
+    );
+  });
+  if (els.createTournamentConfirm) {
+    els.createTournamentConfirm.disabled = !isTournamentSetupComplete();
+  }
+}
+
+function toggleTournamentSetup(force) {
+  state.tournamentSetupOpen =
+    typeof force === "boolean" ? force : !state.tournamentSetupOpen;
+  renderTournamentSetupControls();
+  setStatus(state.tournamentSetupOpen ? "토너먼트 설정을 선택해주세요." : "");
+}
+
+function renderTitleCabinet(stats) {
+  if (!els.titleList) return;
+  const titles = Array.isArray(stats?.titles) ? stats.titles : [];
+  if (els.titleUnequip) {
+    els.titleUnequip.disabled = !stats?.title;
+  }
+  els.titleList.innerHTML = titles.length
+    ? titles
+        .map((title) => {
+          const equipped = Boolean(title.equipped);
+          return `
+            <li>
+              <button
+                class="title-choice ${equipped ? "is-equipped" : ""}"
+                type="button"
+                data-title-id="${escapeHtml(title.id)}"
+                ${equipped ? 'aria-pressed="true"' : 'aria-pressed="false"'}
+              >
+                ${titleBadge({ title })}
+                <span>${equipped ? "장착중" : "클릭 장착"}</span>
+              </button>
+            </li>
+          `;
+        })
+        .join("")
+    : `<li class="empty-title">보유 칭호가 없습니다.</li>`;
 }
 
 async function checkRoomExists(roomCode) {
@@ -666,6 +1311,30 @@ function sendKickOpponent() {
   state.ws.send(JSON.stringify({ type: "kick_opponent" }));
 }
 
+function sendSurrender() {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    setStatus("서버와 연결되어 있지 않습니다.");
+    return;
+  }
+  if (!isGameInProgress()) {
+    setStatus("진행 중인 게임이 없습니다.");
+    return;
+  }
+  const confirmed = window.confirm("이번 판을 항복하고 패배 처리할까요?");
+  if (!confirmed) return;
+  state.actionPending = false;
+  state.ws.send(JSON.stringify({ type: "surrender" }));
+  setStatus("항복 처리 중...");
+}
+
+function sendTournamentCommand(type, payload = {}) {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    setStatus("서버와 연결되어 있지 않습니다.");
+    return;
+  }
+  state.ws.send(JSON.stringify({ type, ...payload }));
+}
+
 function sendEmoticon(emoticon) {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
     setStatus("서버와 연결되어 있지 않습니다.");
@@ -698,6 +1367,7 @@ function render() {
   if (!snapshot) return;
   const { room, game, you } = snapshot;
   document.body.classList.toggle("streamer-room", Boolean(room.streamerMode));
+  document.body.classList.toggle("tournament-room", Boolean(room.tournamentMode));
   if (els.waitingEmoticonStage) {
     els.waitingEmoticonStage.hidden = !room.streamerMode;
   }
@@ -705,24 +1375,20 @@ function render() {
     els.mobile.waitingEmoticonStage.hidden = !room.streamerMode;
   }
   processFx(snapshot);
-  els.roomCode.textContent = room.randomMatch ? "랜덤 매칭" : room.code;
+  els.roomCode.textContent = room.randomMatch ? "랜덤매칭" : room.code;
   els.copyRoom.hidden = Boolean(room.randomMatch);
 
-  const meText =
-    you.queuePosition
-      ? `대기 ${you.queuePosition}번으로 관전 중`
-      : you.player === null || you.player === undefined
-        ? "관전 중"
-      : `${playerName(you.player)}로 플레이 중`;
-  const waitText = room.started
-    ? phaseText(game)
-    : room.streamerMode && room.players[1]?.occupied
-      ? "방송인의 준비를 기다리는 중"
-      : "상대 입장 대기 중";
+  const waitText = room.tournamentMode
+    ? tournamentStatusText(room, game)
+    : room.started
+      ? phaseText(game)
+      : room.streamerMode && room.players[1]?.occupied
+        ? "스트리머의 준비를 기다리는 중"
+        : "상대 입장 대기 중";
   setStatus(
     state.leaveReserved && room.started && !game.result
-      ? "나가기 예약중 · 승패가 결정되면 로비로 이동합니다."
-      : `${meText} · ${waitText}`,
+      ? "나가기 예약중 · 종료 후 이동"
+      : waitText,
   );
 
   for (let player = 0; player < 2; player += 1) {
@@ -746,13 +1412,17 @@ function render() {
   renderStartBanner(room);
   renderLeaveButtons(room, game);
   renderStreamerQueue(room, you);
+  renderTournamentPanel(room, game, you);
   renderFriendlyRecord(room);
   maybeAutoLeaveAfterResult(game);
   rememberDieRects();
 }
 
 function renderFriendlyRecord(room) {
-  const isFriendlyMatch = !room.randomMatch && Boolean(room.players?.[1]?.occupied);
+  const isFriendlyMatch =
+    !room.randomMatch &&
+    !room.tournamentMode &&
+    Boolean(room.players?.[1]?.occupied);
   const score = Array.isArray(room.friendlyScore) ? room.friendlyScore : [0, 0];
   const scoreText = `${Number(score[0]) || 0} : ${Number(score[1]) || 0}`;
   for (const [record, scoreElement] of [
@@ -767,41 +1437,96 @@ function renderFriendlyRecord(room) {
 
 function renderPlayerStateLine(room, roomPlayer) {
   const statsLine = renderPlayerStatLine(roomPlayer?.stats);
-  if (
-    !room.streamerMode ||
-    room.started ||
-    !roomPlayer?.occupied ||
-    roomPlayer.index !== 0
-  ) {
-    return statsLine;
-  }
-  const readyLine = roomPlayer.ready
-    ? '<span class="ready-state">준비 완료</span>'
-    : '<span class="waiting-state">준비 전</span>';
-  return statsLine ? `${statsLine} · ${readyLine}` : readyLine;
+  return statsLine;
 }
 
 function renderPlayerStatLine(stats) {
   if (!stats) return "";
+  const tier = tierBadge(stats);
   const record = `${stats.wins}승 / ${stats.losses}패`;
-  if (stats.streak > 0) {
-    return `${record} · <span class="streak-win">${stats.streak}연승 중</span>`;
-  }
-  if (stats.streak < 0) {
-    return `${record} · <span class="streak-loss">${Math.abs(stats.streak)}연패 중</span>`;
-  }
-  return record;
+  const recordText =
+    stats.streak > 0
+      ? `${record} · <span class="streak-win">${stats.streak}연승 중</span>`
+      : stats.streak < 0
+        ? `${record} · <span class="streak-loss">${Math.abs(stats.streak)}연패 중</span>`
+        : record;
+  return `${tier}<span class="player-state-record">${recordText}</span>`;
+}
+
+function tierBadge(stats) {
+  const tier = stats?.tier;
+  if (!tier) return "";
+  const key = safeTierToken(tier.tier || tier.key || tier.name);
+  if (!key) return "";
+  const label = TIER_LABELS[key];
+  const detail =
+    key === "master"
+      ? `${Math.max(0, Number(tier.points) || 0)}점`
+      : `${TIER_GRADE_LABELS[Number(tier.grade) || 5] || "V"} ${tierStars(Number(tier.stars) || 0)}`;
+  return `
+    <span class="tier-badge tier-${key}" aria-label="${escapeHtml(`${label} ${detail}`)}">
+      <span class="tier-badge-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+      <span class="tier-badge-label">${escapeHtml(label)}</span>
+      <span class="tier-badge-detail">${escapeHtml(detail)}</span>
+    </span>
+  `;
+}
+
+function tierStars(stars) {
+  const filled = Math.max(0, Math.min(5, Math.floor(stars)));
+  return `${"★".repeat(filled)}${"☆".repeat(Math.max(0, 3 - filled))}`;
+}
+
+function safeTierToken(value) {
+  const token = String(value || "").trim().toLowerCase().replace(/_/g, "-");
+  return Object.hasOwn(TIER_LABELS, token) ? token : "";
 }
 
 function renderPlayerNameWithRank(roomPlayer) {
   const name = escapeHtml(roomPlayer?.name || "플레이어");
-  return `${name}${rankBadge(roomPlayer?.stats)}`;
+  const stats = roomPlayer?.stats;
+  const title = titleBadge(stats);
+  return `${title}<span class="player-name-text">${name}</span>`;
 }
 
-function rankBadge(stats) {
-  const rank = Number(stats?.rank);
-  if (!Number.isInteger(rank) || rank < 1 || rank > 20) return "";
-  return `<span class="rank-badge" aria-label="랭킹 ${rank}위">TOP ${rank}</span>`;
+function titleBadge(stats) {
+  const title = stats?.title;
+  if (!title?.label) return "";
+  const color = safeTitleToken(title.color, "gold");
+  const effect = safeTitleToken(title.effect, "glow");
+  const icon = titleIconMarkup(title);
+  return `
+    <span class="title-badge title-color-${color} title-effect-${effect}" aria-label="칭호 ${escapeHtml(title.label)}">
+      ${icon}<span>${escapeHtml(title.label)}</span>
+    </span>
+  `;
+}
+
+function titleIconMarkup(title) {
+  if (title?.icon === "duelist") {
+    return `
+      <span class="title-badge-duelist-die" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </span>
+    `;
+  }
+  if (title?.icon === "mirang") {
+    return `
+      <span class="title-badge-mirang-mark" aria-hidden="true">
+        <svg viewBox="0 0 100 100" focusable="false">
+          <path d="M36 14H80L63 40H92L63 66H83V87H18L42 59H10L36 14Z" />
+        </svg>
+      </span>
+    `;
+  }
+  return title?.iconText
+    ? `<span class="title-badge-icon">${escapeHtml(title.iconText)}</span>`
+    : "";
+}
+
+function safeTitleToken(value, fallback) {
+  const token = String(value || fallback).trim().toLowerCase().replace(/_/g, "-");
+  return TITLE_CLASS_TOKEN.test(token) ? token : fallback;
 }
 
 function requestRender() {
@@ -946,6 +1671,35 @@ function triggerFx(event, snapshot) {
     showWaitingEmoticon(event);
     return;
   }
+
+  if (event.type === "tournament_seeded") {
+    fx.tournamentSeedUntil = Date.now() + 4300;
+    markAnimation(4300);
+    window.setTimeout(() => showTournamentSeedFlyers(snapshot), 80);
+    return;
+  }
+
+  if (event.type === "tournament_match_started") {
+    fx.tournamentStartUntil = Date.now() + 1400;
+    markAnimation(1400);
+    return;
+  }
+
+  if (event.type === "tournament_match_finished") {
+    const duration = 3600;
+    fx.tournamentAdvanceUntil = Date.now() + duration;
+    markAnimation(duration);
+    window.setTimeout(() => showTournamentAdvanceFlyer(snapshot, event), 110);
+    return;
+  }
+
+  if (event.type === "tournament_finished") {
+    const duration = 4200;
+    fx.tournamentChampionUntil = Date.now() + duration;
+    markAnimation(duration);
+    window.setTimeout(() => showTournamentChampionBurst(event), 80);
+    return;
+  }
 }
 
 function hasPairedEggFlick(event, snapshot) {
@@ -977,6 +1731,132 @@ function delayedPulseSet(set, ids, duration, delay = 0) {
     pulseSet(set, ids, duration);
     render();
   }, delay);
+}
+
+function showTournamentSeedFlyers(snapshot) {
+  const tournament = snapshot?.room?.tournament;
+  if (!snapshot?.room?.tournamentMode || !tournament || !els.tournamentBracket) return;
+  if (els.tournamentPanel?.hidden) return;
+  const targets = [
+    ...els.tournamentBracket.querySelectorAll(
+      ".tournament-round:first-child [data-tournament-target-id]:not([data-tournament-target-id=''])",
+    ),
+  ];
+  if (!targets.length) return;
+
+  const fallbackSource =
+    els.tournamentParticipantList?.getBoundingClientRect() ||
+    els.tournamentPanel.getBoundingClientRect();
+  targets.forEach((target, index) => {
+    const clientId = target.dataset.tournamentTargetId;
+    const sourceElement = els.tournamentParticipantList?.querySelector(
+      `[data-tournament-participant-id="${cssEscape(clientId)}"]`,
+    );
+    const sourceRect = sourceElement?.getBoundingClientRect() || fallbackSource;
+    const targetRect = target.getBoundingClientRect();
+    if (!targetRect.width || !targetRect.height) return;
+
+    const flyer = document.createElement("div");
+    flyer.className = "tournament-seed-flyer";
+    flyer.textContent =
+      target.querySelector("span")?.textContent?.trim().replace(/\s+/g, " ") ||
+      sourceElement?.textContent?.trim().replace(/\s+/g, " ") ||
+      "참가자";
+    const width = Math.min(Math.max(targetRect.width, 120), 220);
+    flyer.style.width = `${width}px`;
+    flyer.style.left = `${sourceRect.left + sourceRect.width / 2 - width / 2}px`;
+    flyer.style.top = `${sourceRect.top + sourceRect.height / 2 - targetRect.height / 2}px`;
+    flyer.style.transitionDelay = `${index * 220}ms`;
+    document.body.append(flyer);
+
+    window.requestAnimationFrame(() => {
+      flyer.classList.add("is-flying");
+      flyer.style.left = `${targetRect.left + targetRect.width / 2 - width / 2}px`;
+      flyer.style.top = `${targetRect.top + targetRect.height / 2 - targetRect.height / 2}px`;
+    });
+
+    window.setTimeout(() => {
+      flyer.classList.add("is-done");
+    }, index * 220 + 1180);
+    window.setTimeout(() => {
+      flyer.remove();
+    }, index * 220 + 1900);
+  });
+}
+
+function showTournamentAdvanceFlyer(snapshot, event) {
+  const tournament = snapshot?.room?.tournament;
+  if (!snapshot?.room?.tournamentMode || !tournament || !els.tournamentBracket) return;
+  if (els.tournamentPanel?.hidden) return;
+
+  const rounds = Array.isArray(tournament.rounds) ? tournament.rounds : [];
+  const completedMatch = rounds
+    .flat()
+    .find((match) => match?.matchId && match.matchId === event.matchId);
+  const winnerId = completedMatch?.winnerId;
+  if (!completedMatch || !winnerId) return;
+
+  const source = els.tournamentBracket.querySelector(
+    `[data-tournament-match-id="${cssEscape(completedMatch.matchId)}"] [data-tournament-player-id="${cssEscape(
+      winnerId,
+    )}"]`,
+  );
+  const target = els.tournamentBracket.querySelector(
+    `[data-tournament-round-index="${Number(completedMatch.roundIndex) + 1}"] [data-tournament-player-id="${cssEscape(
+      winnerId,
+    )}"]`,
+  );
+  const sourceRect = source?.getBoundingClientRect();
+  const targetRect = target?.getBoundingClientRect();
+  if (!sourceRect || !targetRect || !targetRect.width || !targetRect.height) return;
+
+  const flyer = document.createElement("div");
+  flyer.className = "tournament-advance-flyer";
+  flyer.textContent = `🏆 ${event.winner || completedMatch.winnerName || "승자"}`;
+  const width = Math.min(Math.max(sourceRect.width, targetRect.width, 150), 240);
+  flyer.style.width = `${width}px`;
+  flyer.style.left = `${sourceRect.left + sourceRect.width / 2 - width / 2}px`;
+  flyer.style.top = `${sourceRect.top + sourceRect.height / 2 - targetRect.height / 2}px`;
+  document.body.append(flyer);
+
+  window.requestAnimationFrame(() => {
+    flyer.classList.add("is-flying");
+    flyer.style.left = `${targetRect.left + targetRect.width / 2 - width / 2}px`;
+    flyer.style.top = `${targetRect.top + targetRect.height / 2 - targetRect.height / 2}px`;
+  });
+
+  window.setTimeout(() => {
+    flyer.classList.add("is-done");
+  }, 1700);
+  window.setTimeout(() => {
+    flyer.remove();
+  }, 2450);
+}
+
+function showTournamentChampionBurst(event) {
+  if (!els.tournamentPanel || els.tournamentPanel.hidden) return;
+  const burst = document.createElement("div");
+  burst.className = "tournament-champion-burst";
+  burst.innerHTML = `
+    <span>🏆</span>
+    <strong>${escapeHtml(event.winner || "우승자")} 우승!</strong>
+    <em>TOURNAMENT WINNER</em>
+  `;
+  els.tournamentPanel.append(burst);
+  window.requestAnimationFrame(() => {
+    burst.classList.add("is-showing");
+  });
+  window.setTimeout(() => {
+    burst.classList.add("is-hiding");
+  }, 2800);
+  window.setTimeout(() => {
+    burst.remove();
+  }, 3800);
+}
+
+function cssEscape(value) {
+  if (window.CSS?.escape) return window.CSS.escape(String(value || ""));
+  return String(value || "").replace(/["\\]/g, "\\$&");
 }
 
 function pulseFields(set, keys, duration) {
@@ -1045,7 +1925,7 @@ function addStrikeFlyer(die, player, opponent, field, removedDice = []) {
 }
 
 function showEmoticon(player, emoticon) {
-  if (!EMOTICONS.some((item) => item.id === emoticon)) return;
+  if (!findEmoticon(emoticon)) return;
   if (isMobileRoomView()) {
     showMobileEmoticon(player, emoticon);
     return;
@@ -1055,7 +1935,7 @@ function showEmoticon(player, emoticon) {
 
 function showWaitingEmoticon(event) {
   if (!state.snapshot?.room?.streamerMode) return;
-  if (!EMOTICONS.some((item) => item.id === event.emoticon)) return;
+  if (!findEmoticon(event.emoticon)) return;
   const stage = isMobileRoomView()
     ? els.mobile.waitingEmoticonStage
     : els.waitingEmoticonStage;
@@ -1114,7 +1994,7 @@ function emoticonImage(emoticon, classes = []) {
 }
 
 function emoticonUrl(emoticon) {
-  return `./emoticon/${encodeURIComponent(emoticon)}.png`;
+  return findEmoticon(emoticon)?.src || `./emoticon/${encodeURIComponent(emoticon)}.png`;
 }
 
 function isVisibleElement(element) {
@@ -1207,9 +2087,9 @@ function scheduleFxRender() {
 }
 
 function phaseText(game) {
-  if (game.phase === "place_normal") return `${playerName(game.currentPlayer)} 배치 차례`;
-  if (game.phase === "select_die") return `${playerName(game.currentPlayer)} 주사위 선택`;
-  if (game.phase === "place_bonus") return `${playerName(game.currentPlayer)} 보너스 배치`;
+  if (game.phase === "place_normal") return "배치 차례";
+  if (game.phase === "select_die") return "주사위 선택";
+  if (game.phase === "place_bonus") return "보너스 배치";
   if (game.phase === "game_over") return "게임 종료";
   return "자동 굴림";
 }
@@ -1263,6 +2143,11 @@ function renderTrays(game) {
 
 function renderControls(room, game, you) {
   for (let player = 0; player < 2; player += 1) {
+    if (room.tournamentMode && !room.started && !game.result) {
+      els.trayControls[player].innerHTML = "";
+      continue;
+    }
+
     if (room.streamerMode && !room.started && !game.result) {
       const host = room.players[0];
       const challenger = room.players[1];
@@ -1318,9 +2203,10 @@ function renderControls(room, game, you) {
 
 function renderEmoticonPicker(isOpen, extraClasses = []) {
   const classes = ["emoticon-picker", ...extraClasses].join(" ");
+  const items = loadoutItems();
   return `
     <div class="${classes}" ${isOpen ? "" : "hidden"}>
-      ${EMOTICONS.map(
+      ${items.map(
         (item) => `
           <button class="emoticon-choice" type="button" data-emoticon-id="${item.id}" aria-label="${item.label}">
             <img src="${emoticonUrl(item.id)}" alt="" draggable="false" />
@@ -1363,7 +2249,7 @@ function renderStreamerQueue(room, you) {
           (waiting) => `
             <li>
               <span>${waiting.position}</span>
-              <strong>${escapeHtml(waiting.name || "대기자")}</strong>
+              <strong>${titleBadge(waiting.stats)}${escapeHtml(waiting.name || "대기자")}</strong>
             </li>
           `,
         )
@@ -1380,7 +2266,7 @@ function renderStreamerQueue(room, you) {
         <div class="emoticon-picker waiting-emoticon-picker" ${
           state.waitingEmoticonPickerOpen ? "" : "hidden"
         }>
-          ${EMOTICONS.map(
+          ${loadoutItems().map(
             (item) => `
               <button class="emoticon-choice" type="button"
                 data-waiting-emoticon-id="${item.id}" aria-label="${item.label}">
@@ -1396,12 +2282,387 @@ function renderStreamerQueue(room, you) {
   els.streamerQueuePanel.hidden = false;
 }
 
+function renderTournamentPanel(room, game, you) {
+  if (!els.tournamentPanel) return;
+  if (!room.tournamentMode || !room.tournament) {
+    els.tournamentPanel.hidden = true;
+    return;
+  }
+
+  const tournament = room.tournament;
+  const participants = Array.isArray(tournament.participants)
+    ? tournament.participants
+    : [];
+  const isHost = you.clientId === tournament.hostId;
+  ensureTournamentManualSlots(tournament);
+  const isSeeding = Date.now() < fx.tournamentSeedUntil;
+  const isStarting = Date.now() < fx.tournamentStartUntil;
+  const isAdvancing = Date.now() < fx.tournamentAdvanceUntil;
+  const isChampion = Date.now() < fx.tournamentChampionUntil;
+
+  els.tournamentPanel.hidden = false;
+  els.tournamentPanel.dataset.size = String(tournament.size || 4);
+  els.tournamentPanel.classList.toggle("is-seeding", isSeeding);
+  els.tournamentPanel.classList.toggle("is-starting-match", isStarting);
+  els.tournamentPanel.classList.toggle("is-advancing", isAdvancing);
+  els.tournamentPanel.classList.toggle("is-champion", isChampion);
+  els.tournamentSummary.textContent = `${tournament.size}인 · ${tournamentFormatText(
+    tournament.targetWins,
+  )}`;
+  els.tournamentStateText.textContent = tournamentStatusText(room, game);
+  els.tournamentHostName.innerHTML =
+    titleBadge(participantStats(tournament, tournament.hostId)) +
+    escapeHtml(tournament.hostName || "방장");
+  els.tournamentParticipantCount.textContent = `${participants.length}/${tournament.size}`;
+  renderTournamentVersus(room, tournament);
+  renderTournamentParticipantList(tournament, isHost);
+  renderTournamentBracket(tournament, isHost);
+  renderTournamentControls(room, tournament, isHost);
+}
+
+function tournamentStatusText(room, game) {
+  const tournament = room.tournament || {};
+  if (tournament.status === "finished") {
+    return `우승 ${tournament.winnerName || "확정"}`;
+  }
+  if (room.started && !game?.result) return phaseText(game);
+  if (room.started && game?.result) return "방장이 시작을 누르면 다음 경기로 진행";
+  if (tournament.seeded) return "배치 완료 · 시작 대기";
+  const count = Array.isArray(tournament.participants)
+    ? tournament.participants.length
+    : 0;
+  return `참가자 대기 중 ${count}/${tournament.size || 0}`;
+}
+
+function renderTournamentVersus(room, tournament) {
+  const match = tournament.activeMatch || tournament.nextMatch;
+  const players = match?.players || [];
+  const names = players.map((player) => player?.name || "대기중");
+  if (tournament.status === "finished") {
+    els.tournamentVersus.textContent = `🏆 ${tournament.winnerName || "우승자"} 우승`;
+    els.tournamentVersus.hidden = false;
+    return;
+  }
+  if (!match || names.length < 2 || names.some((name) => !name || name === "대기중")) {
+    els.tournamentVersus.hidden = true;
+    return;
+  }
+  const score = Array.isArray(match.scores)
+    ? ` · ${Number(match.scores[0]) || 0}:${Number(match.scores[1]) || 0}`
+    : "";
+  els.tournamentVersus.textContent = `${names[0]} VS ${names[1]}${score}`;
+  els.tournamentVersus.hidden = false;
+}
+
+function renderTournamentParticipantList(tournament, isHost) {
+  const participants = Array.isArray(tournament.participants)
+    ? tournament.participants
+    : [];
+  const slots = tournamentDisplaySlots(tournament);
+  const placed = new Set(slots.filter(Boolean));
+  els.tournamentParticipantList.innerHTML = participants.length
+    ? participants
+        .map((participant, index) => {
+          const clientId = participant.clientId || "";
+          const classes = [
+            participant.active ? "is-active" : "",
+            placed.has(clientId) ? "is-placed" : "",
+            state.tournamentPickedId === clientId ? "is-picked" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return `
+            <li
+              class="${classes}"
+              ${isHost ? 'draggable="true"' : ""}
+              data-tournament-participant-id="${escapeHtml(clientId)}"
+            >
+              <span>${index + 1}</span>
+              <strong>${titleBadge(participant.stats)}${escapeHtml(
+                participant.name || "참가자",
+              )}</strong>
+            </li>
+          `;
+        })
+        .join("")
+    : `<li><span>–</span><strong>참가자 없음</strong></li>`;
+}
+
+function renderTournamentBracket(tournament, isHost) {
+  const rounds = tournamentRoundsForDisplay(tournament);
+  els.tournamentBracket.dataset.size = String(tournament.size || 4);
+  els.tournamentBracket.innerHTML = rounds
+    .map((round, roundIndex) => `
+      <section
+        class="tournament-round ${roundIndex === rounds.length - 1 ? "is-final-round" : ""}"
+        data-tournament-round-index="${roundIndex}"
+        style="--match-count: ${round.length}; --round-index: ${roundIndex};"
+      >
+        <h4>${tournamentRoundName({ ...tournament, rounds }, roundIndex)}</h4>
+        <div class="tournament-round-matches">
+          ${round
+            .map((match) =>
+              renderTournamentMatch(tournament, match, isHost, roundIndex === 0),
+            )
+            .join("")}
+        </div>
+      </section>
+    `)
+    .join("");
+}
+
+function tournamentRoundsForDisplay(tournament) {
+  if (Array.isArray(tournament.rounds) && tournament.rounds.length) {
+    return tournament.rounds.map((round) =>
+      round.map((match) => ({ ...match, editable: false })),
+    );
+  }
+
+  const slots = tournamentDisplaySlots(tournament);
+  const rounds = [];
+  let matchCount = Math.max(1, Math.floor(Number(tournament.size || 4) / 2));
+  let roundIndex = 0;
+  while (matchCount >= 1) {
+    const round = [];
+    for (let matchIndex = 0; matchIndex < matchCount; matchIndex += 1) {
+      const firstSlot = matchIndex * 2;
+      const playerIds =
+        roundIndex === 0
+          ? [slots[firstSlot] || null, slots[firstSlot + 1] || null]
+          : [null, null];
+      round.push({
+        matchId: `preview-r${roundIndex}m${matchIndex}`,
+        roundIndex,
+        matchIndex,
+        playerIds,
+        slotIndexes: roundIndex === 0 ? [firstSlot, firstSlot + 1] : null,
+        players: playerIds.map((clientId) => tournamentPlayerPayload(tournament, clientId)),
+        scores: [0, 0],
+        winnerId: null,
+        completed: false,
+        active: false,
+        editable: roundIndex === 0,
+        preview: true,
+      });
+    }
+    rounds.push(round);
+    matchCount = Math.floor(matchCount / 2);
+    roundIndex += 1;
+  }
+  return rounds;
+}
+
+function tournamentPlayerPayload(tournament, clientId) {
+  const participant = participantById(tournament, clientId);
+  return participant
+    ? {
+        clientId,
+        name: participant.name,
+        stats: participant.stats,
+      }
+    : {
+        clientId: null,
+        name: "",
+        stats: null,
+      };
+}
+
+function renderTournamentMatch(tournament, match, isHost, isFirstRound) {
+  const players = Array.isArray(match.players) ? match.players : [];
+  const scores = Array.isArray(match.scores) ? match.scores : [0, 0];
+  const editable = Boolean(match.editable && isFirstRound);
+  return `
+    <div
+      class="tournament-match ${match.active ? "is-active" : ""} ${
+        match.completed ? "is-completed" : ""
+      } ${match.preview ? "is-preview" : ""}"
+      data-tournament-match-id="${escapeHtml(match.matchId || "")}"
+      data-tournament-round-index="${Number(match.roundIndex) || 0}"
+      data-tournament-match-index="${Number(match.matchIndex) || 0}"
+      style="--match-index: ${match.matchIndex};"
+    >
+      ${[0, 1]
+        .map((index) => {
+          if (editable) {
+            return renderTournamentSlot(
+              tournament,
+              match.playerIds?.[index],
+              match.slotIndexes?.[index] ?? match.matchIndex * 2 + index,
+              isHost,
+              match.matchIndex * 2 + index,
+            );
+          }
+          const player = players[index] || {};
+          const isWinner = match.winnerId && player.clientId === match.winnerId;
+          const name = player.name || (match.preview ? "승자 대기" : "대기중");
+          return `
+            <div class="tournament-match-player ${player.clientId ? "" : "is-empty"} ${
+              isWinner ? "is-winner" : ""
+            }"
+              data-tournament-target-id="${escapeHtml(player.clientId || "")}"
+              data-tournament-player-id="${escapeHtml(player.clientId || "")}"
+              style="--seed-index: ${match.matchIndex * 2 + index};">
+              <span>${titleBadge(player.stats)}${escapeHtml(name)}</span>
+              <strong class="tournament-match-score">${Number(scores[index]) || 0}</strong>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderTournamentSlot(tournament, clientId, index, isHost, seedIndex = index) {
+  const participant = participantById(tournament, clientId);
+  const name = participant?.name || "여기로 드래그";
+  return `
+    <div
+      class="tournament-slot ${clientId ? "" : "is-empty"}"
+      data-tournament-slot-index="${index}"
+      data-tournament-target-id="${escapeHtml(clientId || "")}"
+      style="--seed-index: ${seedIndex};"
+      role="button"
+      tabindex="0"
+    >
+      <span>${participant ? `${titleBadge(participant.stats)}${escapeHtml(name)}` : escapeHtml(name)}</span>
+      ${
+        isHost && clientId
+          ? `<button type="button" aria-label="슬롯 비우기" data-tournament-clear-slot="${index}">×</button>`
+          : ""
+      }
+    </div>
+  `;
+}
+
+function renderTournamentControls(room, tournament, isHost) {
+  if (!isHost) {
+    els.tournamentControls.innerHTML = `<p>방장이 대진 배치와 시작을 진행합니다.</p>`;
+    return;
+  }
+  if (tournament.status === "finished") {
+    els.tournamentControls.innerHTML = `<p>토너먼트가 종료되었습니다.</p>`;
+    return;
+  }
+  const full = tournament.participants?.length === tournament.size;
+  const manualFull = tournamentDisplaySlots(tournament).filter(Boolean).length === tournament.size;
+  const controls = [];
+  if (full && ["lobby", "seeded"].includes(tournament.status)) {
+    controls.push(
+      `<button type="button" data-tournament-random-seed>랜덤 배치</button>`,
+    );
+    controls.push(
+      `<button type="button" data-tournament-manual-seed ${
+        manualFull ? "" : "disabled"
+      }>지정 배치 적용</button>`,
+    );
+  }
+  if (tournament.canStart) {
+    controls.push(
+      `<button class="tournament-start-button" type="button" data-tournament-start>시작</button>`,
+    );
+  }
+  if (!full) {
+    controls.push(`<p>참가자 ${tournament.size}명이 모두 들어오면 배치할 수 있습니다.</p>`);
+  }
+  if (!controls.length) {
+    controls.push(`<p>현재 경기가 진행 중입니다.</p>`);
+  }
+  els.tournamentControls.innerHTML = controls.join("");
+}
+
+function tournamentRoundName(tournament, roundIndex) {
+  const totalRounds = tournament.rounds?.length || 1;
+  if (roundIndex === totalRounds - 1) return "결승";
+  if (roundIndex === totalRounds - 2) return "준결승";
+  return `${roundIndex + 1}라운드`;
+}
+
+function ensureTournamentManualSlots(tournament) {
+  const participantKey = (tournament.participants || [])
+    .map((participant) => participant.clientId)
+    .join("|");
+  const seededKey = (tournament.slots || [])
+    .map((slot) => slot.clientId || "")
+    .join("|");
+  const key = `${tournament.size}:${tournament.status}:${participantKey}:${seededKey}`;
+  if (state.tournamentManualKey === key) return;
+  const serverSlots = (tournament.slots || []).map((slot) => slot.clientId || null);
+  state.tournamentManualSlots = serverSlots.length
+    ? serverSlots
+    : Array.from({ length: tournament.size }, () => null);
+  state.tournamentManualKey = key;
+  state.tournamentPickedId = null;
+}
+
+function tournamentDisplaySlots(tournament) {
+  const seededSlots = (tournament.slots || []).map((slot) => slot.clientId || null);
+  if (seededSlots.some(Boolean)) return seededSlots;
+  if (state.tournamentManualSlots.length !== tournament.size) {
+    state.tournamentManualSlots = Array.from({ length: tournament.size }, () => null);
+  }
+  return state.tournamentManualSlots;
+}
+
+function participantById(tournament, clientId) {
+  if (!clientId) return null;
+  return (tournament.participants || []).find((participant) => participant.clientId === clientId) || null;
+}
+
+function participantStats(tournament, clientId) {
+  return participantById(tournament, clientId)?.stats || null;
+}
+
+function amTournamentHost() {
+  const snapshot = state.snapshot;
+  return Boolean(
+    snapshot?.room?.tournamentMode &&
+      snapshot.room.tournament?.hostId &&
+      snapshot.you?.clientId === snapshot.room.tournament.hostId,
+  );
+}
+
+function setTournamentSlot(clientId, index) {
+  const tournament = state.snapshot?.room?.tournament;
+  if (!amTournamentHost() || !tournament || !clientId || index < 0 || index >= tournament.size) return;
+  const known = participantById(tournament, clientId);
+  if (!known) return;
+  const slots = [...tournamentDisplaySlots(tournament)];
+  const currentIndex = slots.indexOf(clientId);
+  if (currentIndex >= 0) slots[currentIndex] = null;
+  slots[index] = clientId;
+  state.tournamentManualSlots = slots;
+  state.tournamentPickedId = null;
+  requestRender();
+}
+
+function clearTournamentSlot(index) {
+  const tournament = state.snapshot?.room?.tournament;
+  if (!amTournamentHost() || !tournament || index < 0 || index >= tournament.size) return;
+  const slots = [...tournamentDisplaySlots(tournament)];
+  slots[index] = null;
+  state.tournamentManualSlots = slots;
+  requestRender();
+}
+
+function seedTournamentManual() {
+  const tournament = state.snapshot?.room?.tournament;
+  if (!tournament) return;
+  const slots = tournamentDisplaySlots(tournament);
+  if (slots.filter(Boolean).length !== tournament.size) {
+    setStatus("참가자를 모든 슬롯에 배치해주세요.");
+    return;
+  }
+  sendTournamentCommand("tournament_seed_manual", { slots });
+}
+
 function renderResult(room, game, you) {
   if (!game.result) {
     els.resultBanner.hidden = true;
+    els.restart.hidden = false;
     els.restart.textContent = "다시하기";
     els.kickOpponent.hidden = true;
     if (els.mobile.resultBanner) els.mobile.resultBanner.hidden = true;
+    if (els.mobile.restart) els.mobile.restart.hidden = false;
     if (els.mobile.restart) els.mobile.restart.textContent = "다시하기";
     if (els.mobile.kickOpponent) els.mobile.kickOpponent.hidden = true;
     return;
@@ -1409,6 +2670,19 @@ function renderResult(room, game, you) {
   const winnerText =
     game.result.winner === null ? "무승부!" : `${playerName(game.result.winner)} 승리!`;
   els.resultWinnerText.textContent = winnerText;
+  if (room.tournamentMode) {
+    els.restart.hidden = true;
+    els.kickOpponent.hidden = true;
+    els.restart.parentElement?.classList.add("single-action");
+    els.resultBanner.hidden = false;
+    if (els.mobile.resultBanner) {
+      els.mobile.resultWinnerText.textContent = winnerText;
+      if (els.mobile.restart) els.mobile.restart.hidden = true;
+      if (els.mobile.kickOpponent) els.mobile.kickOpponent.hidden = true;
+      els.mobile.resultBanner.hidden = false;
+    }
+    return;
+  }
   const votes = room.rematchVotes || 0;
   const needed = room.rematchNeeded || 2;
   const restartText = votes > 0 && votes < needed ? `다시하기 (${votes}/${needed})` : "다시하기";
@@ -1440,22 +2714,49 @@ function requestLeave() {
     returnToLobby("대기열에서 나갔습니다.");
     return;
   }
+  if (state.leaveReserved) {
+    cancelLeaveReservation();
+    return;
+  }
   if (isGameInProgress()) {
     state.leaveReserved = true;
     renderLeaveButtons(state.snapshot.room, state.snapshot.game);
-    setStatus("나가기 예약중 · 승패가 결정되면 로비로 이동합니다.");
+    setStatus("나가기 예약중 · 종료 후 이동");
     return;
   }
   returnToLobby("로비로 돌아왔습니다.");
 }
 
+function cancelLeaveReservation() {
+  state.leaveReserved = false;
+  if (state.leaveAutoTimer) window.clearTimeout(state.leaveAutoTimer);
+  state.leaveAutoTimer = null;
+  if (state.snapshot) {
+    renderLeaveButtons(state.snapshot.room, state.snapshot.game);
+  }
+  setStatus("나가기 예약을 취소했습니다.");
+}
+
 function renderLeaveButtons(room, game) {
   const reserved = Boolean(state.leaveReserved && room?.started && !game?.result);
+  const canSurrender = Boolean(
+    room?.started &&
+      !game?.result &&
+      state.snapshot?.you?.player !== null &&
+      state.snapshot?.you?.player !== undefined &&
+      !state.snapshot?.you?.spectator,
+  );
+  for (const button of [els.surrender, els.mobile.surrender]) {
+    if (!button) continue;
+    button.hidden = !canSurrender;
+    button.disabled = !canSurrender;
+  }
   for (const button of [els.leave, els.mobile.leave]) {
     if (!button) continue;
-    button.textContent = reserved ? "나가기 예약중" : "나가기";
-    button.disabled = reserved;
+    button.textContent = reserved ? "예약 취소" : canSurrender ? "나가기 예약" : "나가기";
+    button.disabled = false;
     button.classList.toggle("leave-reserved", reserved);
+    button.classList.toggle("leave-pending", canSurrender && !reserved);
   }
 }
 
@@ -1508,7 +2809,7 @@ function renderMobile(room, game, you) {
   const { me, opponent } = mobilePlayers(you);
   if (els.mobile.roomCode) {
     els.mobile.roomCode.textContent = room.randomMatch
-      ? "랜덤 매칭"
+      ? "랜덤매칭"
       : room.code;
   }
   renderMobilePlayerCards(room, game, me, opponent);
@@ -1625,8 +2926,10 @@ function renderMobileTray(room, game, you, me) {
 
   if (!room.started) {
     els.mobile.tray.textContent =
-      room.streamerMode && room.players[1]?.occupied
-        ? "방송인의 준비 대기 중"
+      room.tournamentMode
+        ? tournamentStatusText(room, game)
+        : room.streamerMode && room.players[1]?.occupied
+        ? "스트리머의 준비 대기 중"
         : "상대 입장 대기 중";
     return;
   }
@@ -1635,11 +2938,16 @@ function renderMobileTray(room, game, you, me) {
     return;
   }
   els.mobile.tray.textContent =
-    game.currentPlayer === me ? phaseText(game) : `${playerName(game.currentPlayer)} 차례`;
+    game.currentPlayer === me ? phaseText(game) : "상대 차례";
 }
 
 function renderMobileActions(room, game, you, me) {
   if (!els.mobile.actionRow) return;
+  if (room.tournamentMode && !room.started && !game.result) {
+    els.mobile.actionRow.innerHTML = "";
+    return;
+  }
+
   if (room.streamerMode && !room.started && !game.result) {
     const challenger = room.players[1];
     const canReady =
@@ -2014,14 +3322,28 @@ function startMobileDemo() {
           name: "앨리더",
           occupied: true,
           connected: true,
-          stats: { score: 220, wins: 7, losses: 5, streak: -2, rank: 7 },
+          stats: {
+            score: 220,
+            wins: 7,
+            losses: 5,
+            streak: -2,
+            rank: 7,
+            tier: { tier: "gold", grade: 3, stars: 2 },
+          },
         },
         {
           index: 1,
           name: "으랏느랏",
           occupied: true,
           connected: true,
-          stats: { score: 180, wins: 1, losses: 2, streak: 1, rank: 12 },
+          stats: {
+            score: 180,
+            wins: 1,
+            losses: 2,
+            streak: 1,
+            rank: 12,
+            tier: { tier: "diamond", grade: 1, stars: 1 },
+          },
         },
       ],
       clocks: [56, 60],
@@ -2037,7 +3359,14 @@ function startMobileDemo() {
       clientId: state.clientId,
       player: 1,
       spectator: false,
-      stats: { score: 180, wins: 1, losses: 2, streak: 1, rank: 12 },
+      stats: {
+        score: 180,
+        wins: 1,
+        losses: 2,
+        streak: 1,
+        rank: 12,
+        tier: { tier: "diamond", grade: 1, stars: 1 },
+      },
     },
     game: {
       boards: [
@@ -2068,10 +3397,187 @@ function startMobileDemo() {
     log: [],
   };
   state.snapshotReceivedAt = Date.now();
-  els.roomCode.textContent = "랜덤 매칭";
+  els.roomCode.textContent = "랜덤매칭";
   setRoomMode(true);
   setStatus("모바일 세로 UI 데모");
   render();
+}
+
+function startTierDemo() {
+  startMobileDemo();
+  state.snapshot.room.players[0].name = "듀얼따고싶다";
+  state.snapshot.room.players[0].stats = {
+    score: 388,
+    wins: 42,
+    losses: 18,
+    streak: 5,
+    rank: 4,
+    tier: { tier: "gold", grade: 3, stars: 2 },
+    title: {
+      id: "duelist",
+      label: "듀얼리스트",
+      color: "blue",
+      icon: "duelist",
+      effect: "glow",
+    },
+  };
+  state.snapshot.room.players[1].name = "가나다라마바사아자차카타파하";
+  state.snapshot.room.players[1].stats = {
+    score: 724,
+    wins: 86,
+    losses: 51,
+    streak: -1,
+    rank: 1,
+    tier: { tier: "master", points: 145 },
+    title: {
+      id: "rank-top",
+      label: "TOP 1",
+      color: "gold",
+      icon: "crown",
+      iconText: "◆",
+      effect: "shine",
+    },
+  };
+  state.snapshot.you.player = 0;
+  state.snapshot.you.stats = state.snapshot.room.players[0].stats;
+  els.roomCode.textContent = "랜덤매칭";
+  setStatus("티어 배지 인게임 데모");
+  render();
+}
+
+function startTournamentDemo() {
+  startMobileDemo();
+  const participantNames = [
+    "방장스트리머",
+    "모코코장인",
+    "행운의주사위",
+    "토너먼트왕",
+    "긴닉네임참가자테스트",
+    "빠른손놀림",
+    "실드믿는사람",
+    "결승가자",
+  ];
+  const participants = participantNames.map((name, index) => ({
+    clientId: index === 0 ? state.clientId : `demo-tournament-${index}`,
+    name,
+    active: index < 2,
+    stats: {
+      wins: 10 + index * 3,
+      losses: 4 + index,
+      streak: index % 3 === 0 ? 2 : 0,
+      tier: index === 0
+        ? { tier: "master", points: 128 }
+        : { tier: ["gold", "platinum", "diamond", "silver"][index % 4], grade: (index % 5) + 1, stars: index % 3 },
+      title:
+        index === 0
+          ? { id: "duelist", label: "듀얼리스트", color: "blue", icon: "duelist", effect: "glow" }
+          : null,
+    },
+  }));
+  const player = (index) => participants[index];
+  const match = (roundIndex, matchIndex, first, second, options = {}) => ({
+    matchId: `demo-r${roundIndex}m${matchIndex}`,
+    roundIndex,
+    matchIndex,
+    players: [first === null ? null : player(first), second === null ? null : player(second)],
+    scores: options.scores || [0, 0],
+    winnerId: options.winner === null || options.winner === undefined
+      ? null
+      : player(options.winner).clientId,
+    completed: Boolean(options.completed),
+    active: Boolean(options.active),
+  });
+
+  const room = state.snapshot.room;
+  room.code = "2468";
+  room.randomMatch = false;
+  room.ranked = false;
+  room.tournamentMode = true;
+  room.tournament = {
+    size: 8,
+    targetWins: 2,
+    status: "playing",
+    seeded: true,
+    hostId: state.clientId,
+    hostName: "방장스트리머",
+    participants,
+    slots: participants.map((participant) => ({ clientId: participant.clientId })),
+    rounds: [
+      [
+        match(0, 0, 0, 1, { active: true, scores: [1, 0] }),
+        match(0, 1, 2, 3),
+        match(0, 2, 4, 5, { completed: true, winner: 5, scores: [0, 2] }),
+        match(0, 3, 6, 7),
+      ],
+      [
+        match(1, 0, null, null),
+        match(1, 1, 5, null),
+      ],
+      [match(2, 0, null, null)],
+    ],
+    activeMatch: {
+      players: [player(0), player(1)],
+      scores: [1, 0],
+    },
+    nextMatch: null,
+    canStart: false,
+  };
+  room.players[0].name = participantNames[0];
+  room.players[0].stats = participants[0].stats;
+  room.players[1].name = participantNames[1];
+  room.players[1].stats = participants[1].stats;
+  state.snapshot.you.player = 0;
+  state.snapshot.you.stats = participants[0].stats;
+  setStatus("토너먼트 모바일 UI 데모");
+  render();
+}
+
+function startTierLobbyDemo() {
+  setRoomMode(false);
+  document.body.classList.toggle(
+    "tier-help-demo",
+    new URLSearchParams(window.location.search).get("help") === "1",
+  );
+  state.status = {
+    onlineUsers: 128,
+    stats: {
+      score: 388,
+      wins: 42,
+      losses: 18,
+      streak: 5,
+      rank: 4,
+      tier: { tier: "gold", grade: 2, stars: 2 },
+      titles: [],
+    },
+    leaderboard: [
+      {
+        clientId: "sample-1",
+        name: "가나다라마바사아자차카타파하",
+        score: 724,
+        wins: 86,
+        losses: 51,
+        tier: { tier: "master", points: 145 },
+      },
+      {
+        clientId: state.clientId,
+        name: "나",
+        score: 388,
+        wins: 42,
+        losses: 18,
+        tier: { tier: "gold", grade: 2, stars: 2 },
+      },
+      {
+        clientId: "sample-3",
+        name: "주사위조작했으니탈주추천",
+        score: 251,
+        wins: 30,
+        losses: 26,
+        tier: { tier: "silver", grade: 1, stars: 1 },
+      },
+    ],
+  };
+  renderLobbyStatus();
+  setStatus("티어 로비 데모");
 }
 
 els.createRoom.addEventListener("click", () => {
@@ -2080,7 +3586,17 @@ els.createRoom.addEventListener("click", () => {
 
 els.createStreamerRoom?.addEventListener("click", () => {
   createStreamerRoom().catch((error) =>
-    setStatus(`방송인 모드 생성 실패: ${error.message}`),
+    setStatus(`스트리머 모드 생성 실패: ${error.message}`),
+  );
+});
+
+els.createTournamentRoom?.addEventListener("click", () => {
+  toggleTournamentSetup();
+});
+
+els.createTournamentConfirm?.addEventListener("click", () => {
+  createTournamentRoom().catch((error) =>
+    setStatus(`토너먼트 생성 실패: ${error.message}`),
   );
 });
 
@@ -2101,8 +3617,16 @@ els.leave.addEventListener("click", () => {
   requestLeave();
 });
 
+els.surrender?.addEventListener("click", () => {
+  sendSurrender();
+});
+
 els.mobile.leave?.addEventListener("click", () => {
   requestLeave();
+});
+
+els.mobile.surrender?.addEventListener("click", () => {
+  sendSurrender();
 });
 
 els.restart.addEventListener("click", sendRestart);
@@ -2126,8 +3650,136 @@ els.soundVolume.addEventListener("input", () => {
   setSoundVolume(els.soundVolume.value);
 });
 
+els.titleUnequip?.addEventListener("click", () => {
+  unlockSound();
+  unequipTitle().catch((error) =>
+    setStatus(`칭호 해제 실패: ${error.message}`),
+  );
+});
+
+els.customizeOpen?.addEventListener("click", () => {
+  unlockSound();
+  openCustomize("board");
+});
+
 document.addEventListener("click", (event) => {
   unlockSound();
+
+  const titleChoice = event.target.closest("[data-title-id]");
+  if (titleChoice) {
+    equipTitle(titleChoice.dataset.titleId).catch((error) =>
+      setStatus(`칭호 장착 실패: ${error.message}`),
+    );
+    return;
+  }
+
+  const customizeSave = event.target.closest("[data-customize-emoticon-save]");
+  if (customizeSave) {
+    saveEmoticonLoadout();
+    return;
+  }
+
+  const customizeReset = event.target.closest("[data-customize-emoticon-reset]");
+  if (customizeReset) {
+    resetDraftEmoticonLoadout();
+    return;
+  }
+
+  const customizeClose = event.target.closest("[data-customize-close]");
+  if (customizeClose) {
+    closeCustomize();
+    return;
+  }
+
+  const customizeTab = event.target.closest("[data-customize-tab]");
+  if (customizeTab) {
+    setCustomizeTab(customizeTab.dataset.customizeTab);
+    return;
+  }
+
+  const customizeSlot = event.target.closest("[data-customize-emoticon-slot]");
+  if (customizeSlot) {
+    state.customizeSelectedSlot = Number(customizeSlot.dataset.customizeEmoticonSlot) || 0;
+    renderCustomizeEmoticons();
+    return;
+  }
+
+  const customizeEmoticon = event.target.closest("[data-customize-emoticon-id]");
+  if (customizeEmoticon) {
+    setDraftEmoticonSlot(
+      state.customizeSelectedSlot,
+      customizeEmoticon.dataset.customizeEmoticonId,
+    );
+    return;
+  }
+
+  const boardSkinButton = event.target.closest("[data-board-skin]");
+  if (boardSkinButton) {
+    applyBoardSkin(boardSkinButton.dataset.boardSkin, { persist: true });
+    setStatus(`보드판 스킨: ${boardSkinButton.textContent.trim()}`);
+    return;
+  }
+
+  const tournamentHostParticipates = event.target.closest("[data-tournament-host-participates]");
+  if (tournamentHostParticipates) {
+    setTournamentHostParticipates(tournamentHostParticipates.dataset.tournamentHostParticipates);
+    return;
+  }
+
+  const tournamentSize = event.target.closest("[data-tournament-size]");
+  if (tournamentSize) {
+    setTournamentSize(tournamentSize.dataset.tournamentSize);
+    return;
+  }
+
+  const tournamentTargetWins = event.target.closest("[data-tournament-target-wins]");
+  if (tournamentTargetWins) {
+    setTournamentTargetWins(tournamentTargetWins.dataset.tournamentTargetWins);
+    return;
+  }
+
+  const tournamentRandomSeed = event.target.closest("[data-tournament-random-seed]");
+  if (tournamentRandomSeed) {
+    sendTournamentCommand("tournament_seed_random");
+    return;
+  }
+
+  const tournamentManualSeed = event.target.closest("[data-tournament-manual-seed]");
+  if (tournamentManualSeed) {
+    if (!tournamentManualSeed.disabled) seedTournamentManual();
+    return;
+  }
+
+  const tournamentStart = event.target.closest("[data-tournament-start]");
+  if (tournamentStart) {
+    sendTournamentCommand("tournament_start");
+    return;
+  }
+
+  const clearTournamentSlotButton = event.target.closest("[data-tournament-clear-slot]");
+  if (clearTournamentSlotButton) {
+    clearTournamentSlot(Number(clearTournamentSlotButton.dataset.tournamentClearSlot));
+    return;
+  }
+
+  const tournamentSlot = event.target.closest("[data-tournament-slot-index]");
+  if (tournamentSlot && state.tournamentPickedId && amTournamentHost()) {
+    setTournamentSlot(
+      state.tournamentPickedId,
+      Number(tournamentSlot.dataset.tournamentSlotIndex),
+    );
+    return;
+  }
+
+  const tournamentParticipant = event.target.closest("[data-tournament-participant-id]");
+  if (tournamentParticipant && amTournamentHost()) {
+    state.tournamentPickedId =
+      state.tournamentPickedId === tournamentParticipant.dataset.tournamentParticipantId
+        ? null
+        : tournamentParticipant.dataset.tournamentParticipantId;
+    requestRender();
+    return;
+  }
 
   const streamerQueueToggle = event.target.closest("[data-streamer-queue-toggle]");
   if (streamerQueueToggle) {
@@ -2205,8 +3857,91 @@ document.addEventListener("click", (event) => {
 
 });
 
-els.nicknameInput.value = localStorage.getItem("tikatuka.nickname") || "";
+document.addEventListener("dragstart", (event) => {
+  const customizeEmoticon = event.target.closest("[data-customize-emoticon-id]");
+  if (customizeEmoticon) {
+    const emoticonId = customizeEmoticon.dataset.customizeEmoticonId;
+    event.dataTransfer?.setData("application/x-tikatuka-emoticon", emoticonId);
+    event.dataTransfer?.setData("text/plain", emoticonId);
+    event.dataTransfer?.setDragImage?.(customizeEmoticon, 24, 24);
+    return;
+  }
+
+  const participant = event.target.closest("[data-tournament-participant-id]");
+  if (!participant) return;
+  if (!amTournamentHost()) {
+    event.preventDefault();
+    return;
+  }
+  state.tournamentDraggedId = participant.dataset.tournamentParticipantId;
+  event.dataTransfer?.setData("text/plain", state.tournamentDraggedId);
+  event.dataTransfer?.setDragImage?.(participant, 12, 12);
+});
+
+document.addEventListener("dragover", (event) => {
+  const customizeSlot = event.target.closest("[data-customize-emoticon-slot]");
+  if (customizeSlot) {
+    event.preventDefault();
+    customizeSlot.classList.add("is-drop-target");
+    return;
+  }
+
+  const slot = event.target.closest("[data-tournament-slot-index]");
+  if (!slot || !state.tournamentDraggedId) return;
+  event.preventDefault();
+  slot.classList.add("is-drop-target");
+});
+
+document.addEventListener("dragleave", (event) => {
+  const customizeSlot = event.target.closest("[data-customize-emoticon-slot]");
+  if (customizeSlot) customizeSlot.classList.remove("is-drop-target");
+
+  const slot = event.target.closest("[data-tournament-slot-index]");
+  if (slot) slot.classList.remove("is-drop-target");
+});
+
+document.addEventListener("drop", (event) => {
+  const customizeSlot = event.target.closest("[data-customize-emoticon-slot]");
+  if (customizeSlot) {
+    event.preventDefault();
+    const emoticonId =
+      event.dataTransfer?.getData("application/x-tikatuka-emoticon") ||
+      event.dataTransfer?.getData("text/plain");
+    customizeSlot.classList.remove("is-drop-target");
+    setDraftEmoticonSlot(
+      Number(customizeSlot.dataset.customizeEmoticonSlot),
+      emoticonId,
+    );
+    return;
+  }
+
+  const slot = event.target.closest("[data-tournament-slot-index]");
+  if (!slot) return;
+  event.preventDefault();
+  const clientId = event.dataTransfer?.getData("text/plain") || state.tournamentDraggedId;
+  slot.classList.remove("is-drop-target");
+  state.tournamentDraggedId = null;
+  setTournamentSlot(clientId, Number(slot.dataset.tournamentSlotIndex));
+});
+
+document.addEventListener("dragend", () => {
+  state.tournamentDraggedId = null;
+  document
+    .querySelectorAll(".customize-emoticon-slot.is-drop-target")
+    .forEach((slot) => slot.classList.remove("is-drop-target"));
+  document
+    .querySelectorAll(".tournament-slot.is-drop-target")
+    .forEach((slot) => slot.classList.remove("is-drop-target"));
+});
+
+els.nicknameInput.value = localStorage.getItem(NICKNAME_STORAGE_KEY) || "";
+applyBoardSkin(state.boardSkin);
+loadEmoticonCatalog();
+renderTournamentSetupControls();
 setupSound();
+if (CUSTOMIZE_PREVIEW_TAB) {
+  window.setTimeout(() => openCustomize(CUSTOMIZE_PREVIEW_TAB), 200);
+}
 updateMobileStageScale();
 window.addEventListener("resize", updateMobileStageScale);
 window.addEventListener("orientationchange", updateMobileStageScale);
@@ -2214,6 +3949,12 @@ window.visualViewport?.addEventListener("resize", updateMobileStageScale);
 window.visualViewport?.addEventListener("scroll", updateMobileStageScale);
 if (IS_MOBILE_DEMO) {
   startMobileDemo();
+} else if (IS_TIER_DEMO) {
+  startTierDemo();
+} else if (IS_TOURNAMENT_DEMO) {
+  startTournamentDemo();
+} else if (IS_TIER_LOBBY_DEMO) {
+  startTierLobbyDemo();
 } else {
   setRoomMode(false);
   setStatus("");

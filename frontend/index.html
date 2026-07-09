@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>티카투카 멀티</title>
-    <link rel="stylesheet" href="./styles.css?v=20260628-4" />
+    <link rel="stylesheet" href="./styles.css?v=20260707-customize-3" />
   </head>
   <body>
     <main class="app">
@@ -35,8 +35,19 @@
         </header>
 
         <div class="lobby-ranking" id="lobby-ranking">
-          <h3>랭킹 TOP 20</h3>
+          <h3>티어 TOP 20</h3>
           <ol id="leaderboard"></ol>
+        </div>
+
+        <div class="lobby-title-stack">
+          <button id="customize-button" class="customize-open-button" type="button">커스터마이징</button>
+          <div class="lobby-title-cabinet" id="title-cabinet">
+            <div class="title-cabinet-header">
+              <h3>내 칭호</h3>
+              <button type="button" id="title-unequip-button" disabled>장착 해제</button>
+            </div>
+            <ol id="title-list"></ol>
+          </div>
         </div>
 
         <div class="lobby-my-rating" id="my-rating">
@@ -45,44 +56,95 @@
         </div>
 
         <section class="lobby" id="lobby">
-          <div class="online-users" id="online-users">접속 0명</div>
-          <h2>멀티플레이 방</h2>
-          <p>방을 만들면 4자리 번호가 생성됩니다. 상대가 이 번호로 입장하면 게임이 시작됩니다.</p>
+          <div class="lobby-utility">
+            <a
+              class="feedback-link"
+              href="https://open.kakao.com/o/sehgtYBi"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="버그 및 피드백 카카오톡 오픈채팅 열기"
+            >
+              <span class="kakao-mark" aria-hidden="true">💬</span>
+              <span>버그 및 피드백</span>
+            </a>
+            <div class="online-users" id="online-users">접속 0명</div>
+          </div>
           <div class="lobby-actions">
             <label class="nickname-row" for="nickname-input">
               <span>사용할 닉네임 :</span>
               <input id="nickname-input" maxlength="16" autocomplete="nickname" placeholder="닉네임 입력" />
             </label>
             <button id="random-match-button" class="primary-match" type="button">랜덤 매칭</button>
+            <div class="tournament-entry">
+              <div class="room-mode-option">
+                <button id="create-tournament-room-button" type="button" aria-expanded="false" aria-controls="tournament-setup">
+                  토너먼트
+                </button>
+                <span class="room-mode-help" aria-label="토너먼트 설명">?</span>
+                <div class="room-mode-tooltip" role="tooltip">
+                  4·8·16인 대진표를 만들고 배치 완료 후 시작합니다.
+                </div>
+              </div>
+            </div>
+            <section class="tournament-setup" id="tournament-setup" aria-label="토너먼트 설정" hidden>
+              <div class="tournament-setting-group tournament-setting-group-host" aria-label="방장 참여">
+                <span>방장</span>
+                <div class="tournament-option-set tournament-option-set-two">
+                  <button type="button" data-tournament-host-participates="true">게임 참여</button>
+                  <button type="button" data-tournament-host-participates="false">게임 미참여</button>
+                </div>
+              </div>
+              <div class="tournament-setting-group" aria-label="참가 인원">
+                <span>인원</span>
+                <div class="tournament-option-set">
+                  <button type="button" data-tournament-size="4">4인</button>
+                  <button type="button" data-tournament-size="8">8인</button>
+                  <button type="button" data-tournament-size="16">16인</button>
+                </div>
+              </div>
+              <div class="tournament-setting-group" aria-label="경기 방식">
+                <span>방식</span>
+                <div class="tournament-option-set">
+                  <button type="button" data-tournament-target-wins="1">단판</button>
+                  <button type="button" data-tournament-target-wins="2">3판2선승</button>
+                  <button type="button" data-tournament-target-wins="3">5판3선승</button>
+                </div>
+              </div>
+              <button id="create-tournament-confirm-button" class="tournament-create-button" type="button">
+                토너먼트 방 만들기
+              </button>
+            </section>
             <div class="room-mode-actions">
               <div class="room-mode-option">
                 <button id="create-room-button" type="button">방 만들기</button>
                 <span class="room-mode-help" aria-label="방 만들기 설명">?</span>
                 <div class="room-mode-tooltip" role="tooltip">1 vs 1에 적절합니다.</div>
               </div>
-              <div class="room-mode-option">
-                <button id="create-streamer-room-button" type="button">방송인 모드</button>
-                <span class="room-mode-help" aria-label="방송인 모드 설명">?</span>
+              <div class="room-mode-option streamer-mode-option">
+                <button id="create-streamer-room-button" class="streamer-mode-create" type="button">
+                  스트리머 모드
+                </button>
+                <label class="streamer-queue-limit">
+                  <span>대기</span>
+                  <select id="streamer-queue-limit" aria-label="스트리머 모드 대기 가능 인원">
+                    <option value="1">1명</option>
+                    <option value="2">2명</option>
+                    <option value="3">3명</option>
+                    <option value="4">4명</option>
+                    <option value="5">5명</option>
+                    <option value="6">6명</option>
+                    <option value="7">7명</option>
+                    <option value="8">8명</option>
+                    <option value="9">9명</option>
+                    <option value="10">10명</option>
+                  </select>
+                </label>
+                <span class="room-mode-help" aria-label="스트리머 모드 설명">?</span>
                 <div class="room-mode-tooltip" role="tooltip">
                   지정한 숫자만큼 사람들이 와서 대기합니다. 들어온 순서대로 상대합니다.
                   준비완료를 눌러야 시작합니다.
                 </div>
               </div>
-              <label class="streamer-queue-limit">
-                <span>대기</span>
-                <select id="streamer-queue-limit" aria-label="방송인 모드 대기 가능 인원">
-                  <option value="1">1명</option>
-                  <option value="2">2명</option>
-                  <option value="3">3명</option>
-                  <option value="4">4명</option>
-                  <option value="5">5명</option>
-                  <option value="6">6명</option>
-                  <option value="7">7명</option>
-                  <option value="8">8명</option>
-                  <option value="9">9명</option>
-                  <option value="10">10명</option>
-                </select>
-              </label>
             </div>
             <form id="join-form">
               <input id="room-code-input" inputmode="numeric" maxlength="4" placeholder="방 번호 4자리" />
@@ -100,7 +162,12 @@
             </div>
             <button id="copy-room-button" type="button">복사</button>
             <p id="connection-status">연결 중</p>
-            <button class="leave-room-button" id="leave-button" type="button">나가기</button>
+            <div class="exit-actions" id="exit-actions">
+              <button class="surrender-button" id="surrender-button" type="button" hidden>
+                항복
+              </button>
+              <button class="leave-room-button" id="leave-button" type="button">나가기</button>
+            </div>
           </section>
 
           <section class="friendly-record" id="friendly-record" hidden aria-label="현재 상대 전적">
@@ -223,6 +290,27 @@
             </aside>
           </section>
 
+          <section class="tournament-panel" id="tournament-panel" hidden aria-label="토너먼트 대진표">
+            <div class="tournament-panel-header">
+              <div>
+                <span>토너먼트</span>
+                <strong id="tournament-summary">4인 · 단판</strong>
+              </div>
+              <p id="tournament-state-text">참가자 대기 중</p>
+            </div>
+            <div class="tournament-versus" id="tournament-versus" hidden>대진 배치 대기</div>
+            <div class="tournament-layout">
+              <aside class="tournament-roster">
+                <h3>방장</h3>
+                <div class="tournament-host" id="tournament-host-name">-</div>
+                <h3>참가자 <span id="tournament-participant-count">0/4</span></h3>
+                <ol id="tournament-participant-list"></ol>
+              </aside>
+              <div class="tournament-bracket" id="tournament-bracket"></div>
+            </div>
+            <div class="tournament-controls" id="tournament-controls"></div>
+          </section>
+
           <div class="waiting-emoticon-stage" id="waiting-emoticon-stage" hidden></div>
 
           <section class="mobile-game" id="mobile-game" aria-label="티카투카 모바일 세로 보드">
@@ -276,7 +364,12 @@
                     <strong id="mobile-my-total-clock">01:00</strong>
                   </div>
                 </div>
-                <button class="mobile-leave-button" id="mobile-leave-button" type="button">나가기</button>
+                <div class="mobile-exit-actions" id="mobile-exit-actions">
+                  <button class="mobile-surrender-button" id="mobile-surrender-button" type="button" hidden>
+                    항복
+                  </button>
+                  <button class="mobile-leave-button" id="mobile-leave-button" type="button">나가기</button>
+                </div>
                 <div class="mobile-clock-stack">
                   <div class="mobile-time opponent" id="mobile-opponent-turn-clock-panel">
                     <span>턴 시간</span>
@@ -308,9 +401,75 @@
             <input id="sound-volume" type="range" min="0" max="100" step="1" />
           </label>
         </section>
+
+        <section class="customize-modal" id="customize-modal" hidden aria-label="커스터마이징">
+          <div class="customize-backdrop" data-customize-close></div>
+          <div class="customize-dialog" role="dialog" aria-modal="true" aria-labelledby="customize-title">
+            <header class="customize-header">
+              <div>
+                <h2 id="customize-title">커스터마이징</h2>
+                <p>보드판과 이모티콘은 내 화면 설정으로 저장됩니다.</p>
+              </div>
+              <button type="button" class="customize-close-button" data-customize-close aria-label="닫기">×</button>
+            </header>
+            <nav class="customize-tabs" aria-label="커스터마이징 종류">
+              <button type="button" data-customize-tab="board">보드판</button>
+              <button type="button" data-customize-tab="emoticon">이모티콘</button>
+            </nav>
+            <section class="customize-pane" data-customize-pane="board">
+              <div class="customize-section-title">
+                <strong>보드판 스킨</strong>
+                <span>선택 즉시 적용됩니다.</span>
+              </div>
+              <div class="board-skin-options customize-board-skins" id="board-skin-options">
+                <button type="button" data-board-skin="premium-wood">
+                  <span class="board-skin-preview" aria-hidden="true"></span>
+                  <strong>우드</strong>
+                </button>
+                <button type="button" data-board-skin="casino-felt">
+                  <span class="board-skin-preview" aria-hidden="true"></span>
+                  <strong>펠트</strong>
+                </button>
+                <button type="button" data-board-skin="neon-arcade">
+                  <span class="board-skin-preview" aria-hidden="true"></span>
+                  <strong>네온</strong>
+                </button>
+                <button type="button" data-board-skin="pastel-cafe">
+                  <span class="board-skin-preview" aria-hidden="true"></span>
+                  <strong>파스텔</strong>
+                </button>
+                <button type="button" data-board-skin="ice-crystal">
+                  <span class="board-skin-preview" aria-hidden="true"></span>
+                  <strong>아이스</strong>
+                </button>
+                <button type="button" data-board-skin="dancheong-festival">
+                  <span class="board-skin-preview" aria-hidden="true"></span>
+                  <strong>단청</strong>
+                </button>
+              </div>
+            </section>
+            <section class="customize-pane" data-customize-pane="emoticon" hidden>
+              <div class="customize-section-title">
+                <strong>장착 이모티콘 6개</strong>
+                <span>칸을 고르고 아래 이모티콘을 선택하세요.</span>
+              </div>
+              <div class="customize-emoticon-slots" id="customize-emoticon-slots"></div>
+              <div class="customize-section-title">
+                <strong>이모티콘 목록</strong>
+                <span id="customize-emoticon-count">0개</span>
+              </div>
+              <div class="customize-emoticon-catalog" id="customize-emoticon-catalog"></div>
+              <div class="customize-actions">
+                <button type="button" data-customize-emoticon-reset>기본값</button>
+                <button type="button" data-customize-close>취소</button>
+                <button type="button" class="customize-save-button" data-customize-emoticon-save>저장</button>
+              </div>
+            </section>
+          </div>
+        </section>
       </section>
     </main>
 
-    <script src="./app.js?v=20260628-4"></script>
+    <script src="./app.js?v=20260707-customize-3"></script>
   </body>
 </html>

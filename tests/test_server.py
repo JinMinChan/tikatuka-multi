@@ -1,25 +1,45 @@
 import importlib
 import time
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from app.main import (
     PlayerStats,
     Room,
+    TournamentState,
     MAX_STREAMER_QUEUE,
+    RANDOM_RECENT_REMATCH_BLOCK_SECONDS,
     RANDOM_WAIT_CONNECT_GRACE_SECONDS,
     TOTAL_TIME_SECONDS,
     TURN_TIME_SECONDS,
     app,
     apply_ranked_result,
     client_last_seen,
+    finalize_tournament_game,
     invalidate_leaderboard_cache,
     leaderboard_payload,
+    last_random_opponents,
     load_stats_from_db,
+    player_title_inventory,
     player_stats,
+    player_titles,
     rooms,
+    seed_tournament_manual,
+    start_tournament_next_game,
+    tournament_payload,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_random_opponent_history():
+    main_module = importlib.import_module("app.main")
+    main_module.maintenance_drain_enabled = False
+    last_random_opponents.clear()
+    yield
+    main_module.maintenance_drain_enabled = False
+    last_random_opponents.clear()
 
 
 class FixedRng:
@@ -257,7 +277,7 @@ def test_emoticon_event_broadcasts_without_consuming_turn():
             started_for_p0 = ws0.receive_json()
             ws1.receive_json()
 
-            ws0.send_json({"type": "emoticon", "emoticon": "lol"})
+            ws0.send_json({"type": "emoticon", "emoticon": "mokoko_001"})
             emoted_for_p0 = ws0.receive_json()
             emoted_for_p1 = ws1.receive_json()
 
@@ -265,7 +285,7 @@ def test_emoticon_event_broadcasts_without_consuming_turn():
             assert emoted_for_p0["game"]["phase"] == started_for_p0["game"]["phase"]
             assert emoted_for_p0["log"][0]["type"] == "emoticon"
             assert emoted_for_p0["log"][0]["player"] == 0
-            assert emoted_for_p0["log"][0]["emoticon"] == "lol"
+            assert emoted_for_p0["log"][0]["emoticon"] == "mokoko_001"
             assert emoted_for_p1["log"][0]["type"] == "emoticon"
 
 
@@ -563,7 +583,7 @@ def test_streamer_waiter_emoticon_and_leave_update_queue_order():
                     f"/ws/{code}?client_id=wait-2&nickname=Second"
                 ) as second:
                     receive_snapshot(second, lambda payload: payload["you"]["queuePosition"] == 2)
-                    first.send_json({"type": "waiting_emoticon", "emoticon": "lol"})
+                    first.send_json({"type": "waiting_emoticon", "emoticon": "yoz_001"})
                     emoted = receive_snapshot(
                         host,
                         lambda payload: payload["log"]
@@ -594,6 +614,158 @@ def test_streamer_room_accepts_ten_waiters_in_fifo_order():
 
     assert room.assign_streamer_client("overflow", "Overflow") is None
     assert room.waiting_ids == [f"wait-{index}" for index in range(MAX_STREAMER_QUEUE)]
+
+
+def test_admin_streamer_rooms_reports_host_challenger_and_waiters(monkeypatch):
+    monkeypatch.setenv("TIKATUKA_ADMIN_SECRET", "secret")
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    room = Room(code="5555", streamer_mode=True, queue_limit=3)
+    room.player_ids = ["host", "challenger"]
+    room.player_names = ["방장", "도전자"]
+    room.connected = [True, True]
+    room.waiting_ids = ["waiter"]
+    room.waiting_names = {"waiter": "대기자"}
+    room.started = True
+    room.game.phase = "place_normal"
+    rooms[room.code] = room
+    client = TestClient(app)
+
+    response = client.get(
+        "/api/admin/streamer-rooms",
+        headers={"x-admin-secret": "secret"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["count"] == 1
+    assert payload["rooms"][0]["code"] == "5555"
+    assert payload["rooms"][0]["host"]["name"] == "방장"
+    assert payload["rooms"][0]["challenger"]["name"] == "도전자"
+    assert payload["rooms"][0]["waitingPlayers"][0]["name"] == "대기자"
+
+
+def test_admin_random_waiting_rooms_reports_connected_waiters(monkeypatch):
+    monkeypatch.setenv("TIKATUKA_ADMIN_SECRET", "secret")
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    client = TestClient(app)
+
+    waiting = client.post(
+        "/api/random-match",
+        json={"clientId": "human-waiter", "nickname": "Human"},
+    ).json()
+    room = rooms[waiting["code"]]
+
+    with client.websocket_connect(
+        f"/ws/{room.code}?client_id=human-waiter&nickname=Human"
+    ) as ws:
+        ws.receive_json()
+        room.random_wait_started_at = time.time() - RANDOM_RECENT_REMATCH_BLOCK_SECONDS - 1
+        fresh_room = Room(code="9999", random_match=True, ranked=True)
+        fresh_room.player_ids[0] = "fresh"
+        fresh_room.player_names[0] = "Fresh"
+        fresh_room.connected[0] = True
+        fresh_room.random_wait_started_at = time.time()
+        rooms[fresh_room.code] = fresh_room
+
+        response = client.get(
+            "/api/admin/random-waiting-rooms?minWaitSeconds=10",
+            headers={"x-admin-secret": "secret"},
+        )
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["count"] == 1
+        assert payload["rooms"][0]["code"] == room.code
+        assert payload["rooms"][0]["waitingSeconds"] >= 10
+        assert payload["rooms"][0]["player"]["clientId"] == "human-waiter"
+        assert payload["rooms"][0]["join"]["wsPath"] == f"/ws/{room.code}"
+
+
+def test_bot_secret_can_only_read_random_waiting_rooms(monkeypatch):
+    monkeypatch.delenv("TIKATUKA_ADMIN_SECRET", raising=False)
+    monkeypatch.setenv("TIKATUKA_BOT_SECRET", "bot-secret")
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    client = TestClient(app)
+
+    waiting = client.post(
+        "/api/random-match",
+        json={"clientId": "human-waiter", "nickname": "Human"},
+    ).json()
+    room = rooms[waiting["code"]]
+
+    with client.websocket_connect(
+        f"/ws/{room.code}?client_id=human-waiter&nickname=Human"
+    ) as ws:
+        ws.receive_json()
+        room.random_wait_started_at = time.time() - RANDOM_RECENT_REMATCH_BLOCK_SECONDS - 1
+
+        allowed = client.get(
+            "/api/admin/random-waiting-rooms?minWaitSeconds=10",
+            headers={"x-bot-secret": "bot-secret"},
+        )
+        blocked = client.get(
+            "/api/admin/rooms/summary",
+            headers={"x-bot-secret": "bot-secret"},
+        )
+
+        assert allowed.status_code == 200
+        assert allowed.json()["rooms"][0]["code"] == room.code
+        assert blocked.status_code == 503
+
+
+def test_server_drain_prevents_disconnect_loss(monkeypatch):
+    monkeypatch.setenv("TIKATUKA_ADMIN_SECRET", "secret")
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    client = TestClient(app)
+
+    waiting = client.post(
+        "/api/random-match",
+        json={"clientId": "random-a", "nickname": "Alpha"},
+    ).json()
+    client.post(
+        "/api/random-match",
+        json={"clientId": "random-b", "nickname": "Beta"},
+    )
+    room = rooms[waiting["code"]]
+    room.game.rng = FixedRng([5, 2, 4])
+
+    with client.websocket_connect(f"/ws/{room.code}?client_id=random-a&nickname=Alpha") as ws0:
+        ws0.receive_json()
+        with client.websocket_connect(f"/ws/{room.code}?client_id=random-b&nickname=Beta") as ws1:
+            ws0.receive_json()
+            ws1.receive_json()
+
+            state = client.post(
+                "/api/admin/server/drain",
+                headers={"x-admin-secret": "secret"},
+            )
+            ws1.close()
+            drained_snapshot = receive_snapshot(
+                ws0,
+                lambda payload: payload["room"]["players"][1]["connected"] is False,
+            )
+
+            assert state.status_code == 200
+            assert state.json()["drain"] is True
+            assert drained_snapshot["room"]["started"] is True
+            assert player_stats.get("random-a", PlayerStats()).wins == 0
+            assert player_stats.get("random-b", PlayerStats()).losses == 0
+            assert room.game.result is None
+
+    resumed = client.post(
+        "/api/admin/server/resume",
+        headers={"x-admin-secret": "secret"},
+    )
+    assert resumed.status_code == 200
+    assert resumed.json()["drain"] is False
 
 
 def test_random_game_leave_counts_loss_and_room_reenters_match_pool():
@@ -642,6 +814,93 @@ def test_random_game_leave_counts_loss_and_room_reenters_match_pool():
             assert matched["matched"] is True
             assert matched["code"] == room.code
             assert room.player_ids == ["random-a", "random-c"]
+
+
+def test_random_match_blocks_same_ip_pairing():
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/random-match",
+        headers={"x-forwarded-for": "203.0.113.10"},
+        json={"clientId": "same-ip-a", "nickname": "Alpha"},
+    ).json()
+    second = client.post(
+        "/api/random-match",
+        headers={"x-forwarded-for": "203.0.113.10"},
+        json={"clientId": "same-ip-b", "nickname": "Beta"},
+    ).json()
+
+    assert first["matched"] is False
+    assert second["matched"] is False
+    assert second["code"] != first["code"]
+    assert rooms[first["code"]].player_ids == ["same-ip-a", None]
+    assert rooms[second["code"]].player_ids == ["same-ip-b", None]
+
+
+def test_random_match_blocks_previous_opponent_until_both_play_someone_else():
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    last_random_opponents["alpha"] = "beta"
+    last_random_opponents["beta"] = "alpha"
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/random-match",
+        headers={"x-forwarded-for": "203.0.113.11"},
+        json={"clientId": "alpha", "nickname": "Alpha"},
+    ).json()
+    blocked = client.post(
+        "/api/random-match",
+        headers={"x-forwarded-for": "203.0.113.12"},
+        json={"clientId": "beta", "nickname": "Beta"},
+    ).json()
+
+    assert blocked["matched"] is False
+    assert blocked["code"] != first["code"]
+    assert rooms[first["code"]].player_ids == ["alpha", None]
+
+
+def test_random_match_allows_previous_opponent_after_waiting_10_seconds():
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    last_random_opponents["alpha"] = "beta"
+    last_random_opponents["beta"] = "alpha"
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/random-match",
+        headers={"x-forwarded-for": "203.0.113.11"},
+        json={"clientId": "alpha", "nickname": "Alpha"},
+    ).json()
+    room = rooms[first["code"]]
+    room.random_wait_started_at = time.time() - RANDOM_RECENT_REMATCH_BLOCK_SECONDS - 1
+    rematch = client.post(
+        "/api/random-match",
+        headers={"x-forwarded-for": "203.0.113.12"},
+        json={"clientId": "beta", "nickname": "Beta"},
+    ).json()
+
+    assert rematch["matched"] is True
+    assert rematch["code"] == first["code"]
+    assert room.player_ids == ["alpha", "beta"]
+
+
+def test_ranked_random_result_remembers_previous_opponents():
+    rooms.clear()
+    player_stats.clear()
+    client_last_seen.clear()
+    room = Room(code="9090", random_match=True, ranked=True)
+    room.player_ids = ["winner", "loser"]
+    room.game.result = {"winner": 0}
+
+    apply_ranked_result(room)
+
+    assert last_random_opponents == {"winner": "loser", "loser": "winner"}
 
 
 def test_random_match_does_not_join_abandoned_waiting_room():
@@ -790,7 +1049,7 @@ def test_restart_requires_both_players_to_vote():
             assert restarted_for_p1["room"]["started"] is True
 
 
-def test_ranked_result_updates_score_wins_losses_and_streak_weight():
+def test_ranked_result_updates_tier_wins_losses_and_streak_bonus():
     rooms.clear()
     player_stats.clear()
     client_last_seen.clear()
@@ -801,12 +1060,14 @@ def test_ranked_result_updates_score_wins_losses_and_streak_weight():
 
     apply_ranked_result(room)
 
-    assert player_stats["winner"].score == 10
     assert player_stats["winner"].wins == 1
     assert player_stats["winner"].streak == 1
-    assert player_stats["loser"].score == 0
+    assert player_stats["winner"].tier == "bronze"
+    assert player_stats["winner"].tier_grade == 5
+    assert player_stats["winner"].tier_stars == 1
     assert player_stats["loser"].losses == 1
     assert player_stats["loser"].streak == -1
+    assert player_stats["loser"].tier_stars == 0
 
     next_room = Room(code="1235", random_match=True, ranked=True)
     next_room.player_ids = ["winner", "loser"]
@@ -814,12 +1075,23 @@ def test_ranked_result_updates_score_wins_losses_and_streak_weight():
 
     apply_ranked_result(next_room)
 
-    assert player_stats["winner"].score == 22
     assert player_stats["winner"].wins == 2
     assert player_stats["winner"].streak == 2
-    assert player_stats["loser"].score == 0
+    assert player_stats["winner"].tier_grade == 5
+    assert player_stats["winner"].tier_stars == 2
     assert player_stats["loser"].losses == 2
     assert player_stats["loser"].streak == -2
+
+    third_room = Room(code="1236", random_match=True, ranked=True)
+    third_room.player_ids = ["winner", "loser"]
+    third_room.game.result = {"winner": 0}
+
+    apply_ranked_result(third_room)
+
+    assert player_stats["winner"].wins == 3
+    assert player_stats["winner"].streak == 3
+    assert player_stats["winner"].tier_grade == 4
+    assert player_stats["winner"].tier_stars == 1
 
 
 def test_manual_room_result_does_not_update_ranked_stats():
@@ -880,6 +1152,110 @@ def test_streamer_room_records_current_challenger_score_once():
     assert room.friendly_wins == [1, 1]
 
 
+def make_tournament_room(size=4, target_wins=1, host_participates=True):
+    tournament = TournamentState(
+        host_id="host",
+        host_name="Host",
+        host_participates=host_participates,
+        size=size,
+        target_wins=target_wins,
+        slots=[None for _ in range(size)],
+    )
+    room = Room(code="4444", tournament_mode=True, tournament=tournament)
+    for client_id, nickname in [
+        ("host", "Host"),
+        ("p1", "One"),
+        ("p2", "Two"),
+        ("p3", "Three"),
+    ][:size]:
+        room.assign_tournament_client(client_id, nickname)
+    return room
+
+
+def test_tournament_seeded_room_exposes_start_after_placement():
+    room = make_tournament_room()
+
+    before = tournament_payload(room)
+    assert before["readyToSeed"] is True
+    assert before["seeded"] is False
+    assert before["canStart"] is False
+
+    seed_tournament_manual(room, ["host", "p1", "p2", "p3"])
+    after = tournament_payload(room)
+
+    assert after["seeded"] is True
+    assert after["canStart"] is True
+    assert after["rounds"][0][0]["players"][0]["name"] == "Host"
+
+
+def test_tournament_room_endpoint_creates_configured_room():
+    rooms.clear()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/tournament-rooms",
+        json={
+            "clientId": "host",
+            "nickname": "Host",
+            "size": 8,
+            "targetWins": 2,
+            "hostParticipates": False,
+        },
+    )
+
+    assert response.status_code == 200
+    code = response.json()["code"]
+    room = rooms[code]
+    assert room.tournament_mode is True
+    assert room.tournament.size == 8
+    assert room.tournament.target_wins == 2
+    assert room.tournament.host_participates is False
+    assert room.tournament.participant_ids == []
+
+
+def test_tournament_start_assigns_current_match_players():
+    room = make_tournament_room()
+    seed_tournament_manual(room, ["host", "p1", "p2", "p3"])
+
+    start_tournament_next_game(room)
+
+    assert room.started is True
+    assert room.player_ids == ["host", "p1"]
+    assert room.player_names == ["Host", "One"]
+    payload = tournament_payload(room)
+    assert payload["activeMatch"]["matchId"] == "r0m0"
+    assert payload["canStart"] is False
+
+
+def test_tournament_match_winner_advances_and_next_start_becomes_available():
+    room = make_tournament_room()
+    seed_tournament_manual(room, ["host", "p1", "p2", "p3"])
+    start_tournament_next_game(room)
+
+    room.game.result = {"winner": 0}
+    finalize_tournament_game(room)
+
+    payload = tournament_payload(room)
+    assert payload["rounds"][0][0]["completed"] is True
+    assert payload["rounds"][1][0]["players"][0]["clientId"] == "host"
+    assert payload["canStart"] is True
+
+
+def test_tournament_best_of_three_needs_two_set_wins():
+    room = make_tournament_room(target_wins=2)
+    seed_tournament_manual(room, ["host", "p1", "p2", "p3"])
+    start_tournament_next_game(room)
+
+    room.game.result = {"winner": 0}
+    finalize_tournament_game(room)
+
+    payload = tournament_payload(room)
+    assert payload["rounds"][0][0]["scores"] == [1, 0]
+    assert payload["rounds"][0][0]["completed"] is False
+    assert payload["status"] == "between_sets"
+    assert payload["canStart"] is True
+
+
 def test_status_payload_includes_top_twenty_leaderboard():
     rooms.clear()
     player_stats.clear()
@@ -889,7 +1265,8 @@ def test_status_payload_includes_top_twenty_leaderboard():
     for index in range(25):
         player_stats[f"player-{index}"] = PlayerStats(
             name=f"Player {index}",
-            score=index,
+            tier="master",
+            master_points=index,
             wins=index % 7,
             losses=25 - index,
         )
@@ -899,12 +1276,12 @@ def test_status_payload_includes_top_twenty_leaderboard():
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["stats"]["score"] == 24
+    assert payload["stats"]["tier"]["points"] == 24
     assert payload["stats"]["rank"] == 1
     assert len(payload["leaderboard"]) == 20
     assert payload["leaderboard"][0]["rank"] == 1
     assert payload["leaderboard"][0]["name"] == "Player 24"
-    assert payload["leaderboard"][-1]["score"] == 5
+    assert payload["leaderboard"][-1]["tier"]["points"] == 5
     assert payload["leaderboard"][-1]["rank"] == 20
 
 
@@ -913,7 +1290,7 @@ def test_leaderboard_cache_is_invalidated_after_ranked_result():
     player_stats.clear()
     client_last_seen.clear()
     player_stats["winner"] = PlayerStats(name="Winner")
-    player_stats["loser"] = PlayerStats(name="Loser", score=5)
+    player_stats["loser"] = PlayerStats(name="Loser", tier_stars=1)
     invalidate_leaderboard_cache()
     assert leaderboard_payload()[0]["clientId"] == "loser"
 
@@ -924,13 +1301,13 @@ def test_leaderboard_cache_is_invalidated_after_ranked_result():
 
     updated = leaderboard_payload()
     assert updated[0]["clientId"] == "winner"
-    assert updated[0]["score"] == 10
+    assert updated[0]["tier"]["stars"] == 1
 
 
 def test_unchanged_player_name_does_not_persist_again(monkeypatch):
     main_module = importlib.import_module("app.main")
     player_stats.clear()
-    player_stats["same-name"] = PlayerStats(name="Same", score=10)
+    player_stats["same-name"] = PlayerStats(name="Same", tier_stars=1)
     invalidate_leaderboard_cache()
     assert leaderboard_payload()[0]["name"] == "Same"
     persisted = []
@@ -948,10 +1325,12 @@ def test_ranked_stats_persist_to_sqlite(tmp_path, monkeypatch):
     monkeypatch.setenv("TIKATUKA_STATS_DB", str(tmp_path / "stats.sqlite3"))
     rooms.clear()
     player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
     client_last_seen.clear()
 
     player_stats["winner"] = PlayerStats(name="Winner")
-    player_stats["loser"] = PlayerStats(name="Loser", score=25)
+    player_stats["loser"] = PlayerStats(name="Loser")
     room = Room(code="7777", random_match=True, ranked=True)
     room.player_ids = ["winner", "loser"]
     room.game.result = {"winner": 0}
@@ -961,7 +1340,303 @@ def test_ranked_stats_persist_to_sqlite(tmp_path, monkeypatch):
     load_stats_from_db()
 
     assert player_stats["winner"].name == "Winner"
-    assert player_stats["winner"].score == 10
     assert player_stats["winner"].wins == 1
-    assert player_stats["loser"].score == 15
+    assert player_stats["winner"].tier == "bronze"
+    assert player_stats["winner"].tier_grade == 5
+    assert player_stats["winner"].tier_stars == 1
     assert player_stats["loser"].losses == 1
+
+
+def test_title_admin_api_requires_secret(monkeypatch):
+    monkeypatch.delenv("TIKATUKA_ADMIN_SECRET", raising=False)
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/admin/titles/grant",
+        json={"clientId": "dev", "label": "개발자"},
+    )
+
+    assert response.status_code == 503
+    assert player_titles == {}
+
+
+def test_title_grant_revoke_and_player_search(monkeypatch):
+    monkeypatch.setenv("TIKATUKA_ADMIN_SECRET", "secret")
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    player_stats["dev-1"] = PlayerStats(name="개발자", score=12, wins=2)
+    player_stats["other"] = PlayerStats(name="다른사람", score=5)
+    client_last_seen["dev-1"] = time.time()
+    client = TestClient(app)
+
+    grant = client.post(
+        "/api/admin/titles/grant",
+        headers={"x-admin-secret": "secret"},
+        json={
+            "clientId": "dev-1",
+            "label": "듀얼리스트",
+            "color": "duelist",
+            "icon": "duelist",
+            "effect": "crystal",
+        },
+    )
+    found = client.get(
+        "/api/admin/players?nickname=개발자",
+        headers={"x-admin-secret": "secret"},
+    )
+
+    assert grant.status_code == 200
+    assert grant.json()["title"] == {
+        "id": "duelist",
+        "label": "듀얼리스트",
+        "color": "duelist",
+        "icon": "duelist",
+        "iconText": "",
+        "effect": "crystal",
+    }
+    assert found.status_code == 200
+    assert found.json()["players"][0]["clientId"] == "dev-1"
+    assert found.json()["players"][0]["title"]["label"] == "듀얼리스트"
+    assert "title" not in leaderboard_payload()[0]
+    assert player_title_inventory["dev-1"]["duelist"].label == "듀얼리스트"
+
+    revoked = client.post(
+        "/api/admin/titles/revoke",
+        headers={"Authorization": "Bearer secret"},
+        json={"clientId": "dev-1"},
+    )
+
+    assert revoked.status_code == 200
+    assert revoked.json()["removed"] is True
+    assert "dev-1" not in player_titles
+    assert "dev-1" not in player_title_inventory
+
+
+def test_title_grant_broadcasts_to_connected_room(monkeypatch):
+    monkeypatch.setenv("TIKATUKA_ADMIN_SECRET", "secret")
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    client = TestClient(app)
+    code = client.post("/api/rooms").json()["code"]
+
+    with client.websocket_connect(f"/ws/{code}?client_id=dev&nickname=개발자") as ws:
+        first = receive_snapshot(ws)
+        assert "title" not in first["room"]["players"][0]["stats"]
+
+        response = client.post(
+            "/api/admin/titles/grant",
+            headers={"x-admin-secret": "secret"},
+            json={
+                "clientId": "dev",
+                "label": "실시간칭호",
+                "color": "neon",
+                "icon": "duck",
+                "effect": "glow",
+            },
+        )
+        updated = receive_snapshot(
+            ws,
+            lambda payload: payload["room"]["players"][0]["stats"]
+            .get("title", {})
+            .get("label")
+            == "실시간칭호",
+        )
+
+        assert response.status_code == 200
+        assert updated["you"]["stats"]["title"]["iconText"] == "🦆"
+
+
+def test_player_can_equip_one_owned_title(monkeypatch):
+    monkeypatch.setenv("TIKATUKA_ADMIN_SECRET", "secret")
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    player_stats["dev"] = PlayerStats(name="개발자")
+    client = TestClient(app)
+
+    first = client.post(
+        "/api/admin/titles/grant",
+        headers={"x-admin-secret": "secret"},
+        json={
+            "clientId": "dev",
+            "titleId": "duelist",
+            "label": "듀얼리스트",
+            "color": "duelist",
+            "icon": "duelist",
+            "effect": "crystal",
+        },
+    )
+    second = client.post(
+        "/api/admin/titles/grant",
+        headers={"x-admin-secret": "secret"},
+        json={
+            "clientId": "dev",
+            "titleId": "ranker",
+            "label": "랭커",
+            "color": "gold",
+            "icon": "crown",
+            "effect": "shine",
+        },
+    )
+    equipped = client.post(
+        "/api/titles/equip",
+        json={"clientId": "dev", "titleId": "duelist"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert equipped.status_code == 200
+    stats = equipped.json()["stats"]
+    assert stats["title"]["id"] == "duelist"
+    assert [title["id"] for title in stats["titles"]] == ["duelist", "ranker"]
+    assert [title["equipped"] for title in stats["titles"]] == [True, False]
+
+    unequipped = client.post("/api/titles/unequip", json={"clientId": "dev"})
+
+    assert unequipped.status_code == 200
+    unequipped_stats = unequipped.json()["stats"]
+    assert "title" not in unequipped_stats
+    assert [title["id"] for title in unequipped_stats["titles"]] == [
+        "duelist",
+        "ranker",
+    ]
+    assert [title["equipped"] for title in unequipped_stats["titles"]] == [
+        False,
+        False,
+    ]
+    assert "dev" not in player_titles
+
+
+def test_rank_title_reflects_live_leaderboard_and_stays_out_of_leaderboard():
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    player_stats["top"] = PlayerStats(name="Top", tier="gold", tier_grade=2, tier_stars=1, wins=4)
+    player_stats["second"] = PlayerStats(
+        name="Second",
+        tier="gold",
+        tier_grade=3,
+        tier_stars=2,
+        wins=2,
+    )
+    invalidate_leaderboard_cache()
+    client = TestClient(app)
+
+    first = client.get("/api/status?client_id=top").json()
+    equipped = client.post(
+        "/api/titles/equip",
+        json={"clientId": "top", "titleId": "rank-top"},
+    ).json()
+
+    assert next(title for title in first["stats"]["titles"] if title["id"] == "rank-top")[
+        "label"
+    ] == "TOP 1"
+    assert all("title" not in entry for entry in first["leaderboard"])
+    assert equipped["stats"]["title"]["label"] == "TOP 1"
+
+    player_stats["second"].tier = "platinum"
+    player_stats["second"].tier_grade = 5
+    player_stats["second"].tier_stars = 0
+    invalidate_leaderboard_cache()
+    changed = client.get("/api/status?client_id=top").json()
+
+    assert changed["stats"]["title"]["label"] == "TOP 2"
+    assert next(
+        title for title in changed["stats"]["titles"] if title["id"] == "rank-top"
+    )["label"] == "TOP 2"
+
+    for index in range(21):
+        player_stats[f"ranker-{index}"] = PlayerStats(
+            name=f"Ranker {index}",
+            tier="master",
+            master_points=100 + index,
+            wins=index,
+        )
+    invalidate_leaderboard_cache()
+    dropped = client.get("/api/status?client_id=top").json()
+
+    assert "title" not in dropped["stats"]
+    assert all(title["id"] != "rank-top" for title in dropped["stats"]["titles"])
+
+
+def test_duelist_title_is_owned_after_first_ten_random_match_streak():
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    player_stats["winner"] = PlayerStats(name="Winner", streak=9, wins=9, score=100)
+    player_stats["loser"] = PlayerStats(name="Loser", score=30)
+    room = Room(code="7777", random_match=True, ranked=True)
+    room.player_ids = ["winner", "loser"]
+    room.game.result = {"winner": 0}
+
+    apply_ranked_result(room)
+
+    assert player_stats["winner"].streak == 10
+    assert player_title_inventory["winner"]["duelist"].label == "듀얼리스트"
+
+
+def test_developer_nickname_does_not_auto_create_title():
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    player_stats["dev"] = PlayerStats(name="개발자")
+    client = TestClient(app)
+
+    payload = client.get("/api/status?client_id=dev").json()
+
+    assert payload["stats"]["titles"] == []
+
+
+def test_titles_persist_to_sqlite(tmp_path, monkeypatch):
+    monkeypatch.setenv("TIKATUKA_STATS_DB", str(tmp_path / "stats.sqlite3"))
+    monkeypatch.setenv("TIKATUKA_ADMIN_SECRET", "secret")
+    rooms.clear()
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    client_last_seen.clear()
+    player_stats["dev"] = PlayerStats(name="개발자", score=1)
+    client = TestClient(app)
+
+    response = client.post(
+        "/api/admin/titles/grant",
+        headers={"x-admin-secret": "secret"},
+        json={
+            "clientId": "dev",
+            "label": "영구칭호",
+            "color": "rainbow",
+            "icon": "crown",
+            "effect": "rainbow",
+        },
+    )
+    assert response.status_code == 200
+
+    player_stats.clear()
+    player_titles.clear()
+    player_title_inventory.clear()
+    load_stats_from_db()
+
+    assert player_titles["dev"].label == "영구칭호"
+    assert player_titles["dev"].color == "rainbow"
+    assert player_titles["dev"].icon == "crown"
+    assert player_titles["dev"].effect == "rainbow"
+    assert player_title_inventory["dev"]["영구칭호"].label == "영구칭호"

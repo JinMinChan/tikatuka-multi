@@ -6,3 +6,8 @@ __pycache__/
 dist/
 node_modules/
 
+# Local agent notes and generated previews
+CODEX_STATE.md
+analysis_exports/
+tmp_*_preview/
+tmp_tournament_preview*/
