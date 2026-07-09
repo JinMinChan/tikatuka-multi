@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>티카투카 멀티</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20260628-3" />
   </head>
   <body>
     <main class="app">
@@ -34,12 +34,18 @@
           </article>
         </header>
 
+        <div class="lobby-ranking" id="lobby-ranking">
+          <h3>랭킹 TOP 20</h3>
+          <ol id="leaderboard"></ol>
+        </div>
+
+        <div class="lobby-my-rating" id="my-rating">
+          <strong>0점</strong>
+          <span>0승 / 0패</span>
+        </div>
+
         <section class="lobby" id="lobby">
           <div class="online-users" id="online-users">접속 0명</div>
-          <div class="lobby-rating" id="lobby-rating">
-            <strong>0점</strong>
-            <span>0승 / 0패</span>
-          </div>
           <h2>멀티플레이 방</h2>
           <p>방을 만들면 4자리 번호가 생성됩니다. 상대가 이 번호로 입장하면 게임이 시작됩니다.</p>
           <div class="lobby-actions">
@@ -48,7 +54,36 @@
               <input id="nickname-input" maxlength="16" autocomplete="nickname" placeholder="닉네임 입력" />
             </label>
             <button id="random-match-button" class="primary-match" type="button">랜덤 매칭</button>
-            <button id="create-room-button" type="button">방 만들기</button>
+            <div class="room-mode-actions">
+              <div class="room-mode-option">
+                <button id="create-room-button" type="button">방 만들기</button>
+                <span class="room-mode-help" aria-label="방 만들기 설명">?</span>
+                <div class="room-mode-tooltip" role="tooltip">1 vs 1에 적절합니다.</div>
+              </div>
+              <div class="room-mode-option">
+                <button id="create-streamer-room-button" type="button">방송인 모드</button>
+                <span class="room-mode-help" aria-label="방송인 모드 설명">?</span>
+                <div class="room-mode-tooltip" role="tooltip">
+                  지정한 숫자만큼 사람들이 와서 대기합니다. 들어온 순서대로 상대합니다.
+                  준비완료를 눌러야 시작합니다.
+                </div>
+              </div>
+              <label class="streamer-queue-limit">
+                <span>대기</span>
+                <select id="streamer-queue-limit" aria-label="방송인 모드 대기 가능 인원">
+                  <option value="1">1명</option>
+                  <option value="2">2명</option>
+                  <option value="3">3명</option>
+                  <option value="4">4명</option>
+                  <option value="5">5명</option>
+                  <option value="6">6명</option>
+                  <option value="7">7명</option>
+                  <option value="8">8명</option>
+                  <option value="9">9명</option>
+                  <option value="10">10명</option>
+                </select>
+              </label>
+            </div>
             <form id="join-form">
               <input id="room-code-input" inputmode="numeric" maxlength="4" placeholder="방 번호 4자리" />
               <button type="submit">입장</button>
@@ -68,6 +103,11 @@
             <button class="leave-room-button" id="leave-button" type="button">나가기</button>
           </section>
 
+          <section class="friendly-record" id="friendly-record" hidden aria-label="현재 상대 전적">
+            <span>친선 전적</span>
+            <strong id="friendly-record-score">0 : 0</strong>
+          </section>
+
           <section class="start-banner" id="start-banner" hidden aria-live="polite">
             <div class="rolloff-dice">
               <div>
@@ -83,58 +123,161 @@
             <strong id="start-banner-text">선공!</strong>
           </section>
 
+          <aside class="streamer-queue-panel" id="streamer-queue-panel" hidden>
+            <h3>대기자 <span id="streamer-queue-count">0/0</span></h3>
+            <ol id="streamer-queue-list"></ol>
+            <div id="waiting-emoticon-control"></div>
+          </aside>
+
           <section class="board-wrap">
             <aside class="player-side side-left" aria-label="선공 주사위 영역">
               <div class="dice-tray tray-left">
-                <div class="tray-label">선공 트레이</div>
+                <div class="tray-label">초록 트레이</div>
                 <div class="tray-dice" id="tray-0"></div>
               </div>
               <div class="tray-controls" id="tray-controls-0"></div>
             </aside>
 
-            <section class="battle-board" id="battle-board" aria-label="티카투카 보드">
-              <div class="field-row" data-field="0">
-                <div class="field field-left" data-player="0" data-field="0" role="button" tabindex="0"></div>
-                <div class="score-bridge" id="score-0">
-                  <span class="score-left">0</span>
-                  <span class="arrow">–</span>
-                  <span class="score-right">0</span>
+            <section class="battle-column">
+              <section class="battle-board" id="battle-board" aria-label="티카투카 보드">
+                <div class="field-row" data-field="0">
+                  <div class="field field-left" data-player="0" data-field="0" role="button" tabindex="0"></div>
+                  <div class="score-bridge" id="score-0">
+                    <span class="score-left">0</span>
+                    <span class="arrow">–</span>
+                    <span class="score-right">0</span>
+                  </div>
+                  <div class="field field-right" data-player="1" data-field="0" role="button" tabindex="0"></div>
                 </div>
-                <div class="field field-right" data-player="1" data-field="0" role="button" tabindex="0"></div>
-              </div>
-              <div class="field-row" data-field="1">
-                <div class="field field-left" data-player="0" data-field="1" role="button" tabindex="0"></div>
-                <div class="score-bridge" id="score-1">
-                  <span class="score-left">0</span>
-                  <span class="arrow">–</span>
-                  <span class="score-right">0</span>
+                <div class="field-row" data-field="1">
+                  <div class="field field-left" data-player="0" data-field="1" role="button" tabindex="0"></div>
+                  <div class="score-bridge" id="score-1">
+                    <span class="score-left">0</span>
+                    <span class="arrow">–</span>
+                    <span class="score-right">0</span>
+                  </div>
+                  <div class="field field-right" data-player="1" data-field="1" role="button" tabindex="0"></div>
                 </div>
-                <div class="field field-right" data-player="1" data-field="1" role="button" tabindex="0"></div>
-              </div>
-              <div class="field-row" data-field="2">
-                <div class="field field-left" data-player="0" data-field="2" role="button" tabindex="0"></div>
-                <div class="score-bridge" id="score-2">
-                  <span class="score-left">0</span>
-                  <span class="arrow">–</span>
-                  <span class="score-right">0</span>
+                <div class="field-row" data-field="2">
+                  <div class="field field-left" data-player="0" data-field="2" role="button" tabindex="0"></div>
+                  <div class="score-bridge" id="score-2">
+                    <span class="score-left">0</span>
+                    <span class="arrow">–</span>
+                    <span class="score-right">0</span>
+                  </div>
+                  <div class="field field-right" data-player="1" data-field="2" role="button" tabindex="0"></div>
                 </div>
-                <div class="field field-right" data-player="1" data-field="2" role="button" tabindex="0"></div>
-              </div>
-              <div class="result-banner" id="result-banner" hidden>
-                <strong id="result-winner-text">승리!</strong>
-                <button type="button" id="restart-button">다시하기</button>
+                <div class="result-banner" id="result-banner" hidden>
+                  <strong id="result-winner-text">승리!</strong>
+                  <div class="result-actions">
+                    <button type="button" id="restart-button">다시하기</button>
+                    <button type="button" class="kick-opponent-button" id="kick-opponent-button">
+                      내보내기
+                    </button>
+                  </div>
+                </div>
+              </section>
+              <div class="clock-row" aria-label="턴 시간과 총 시간">
+                <div class="clock-stack clock-left">
+                  <div class="clock-panel" id="turn-clock-panel-0">
+                    <span>턴 시간</span>
+                    <strong id="turn-clock-0">00:15</strong>
+                  </div>
+                  <div class="clock-panel" id="total-clock-panel-0">
+                    <span>총 시간</span>
+                    <strong id="total-clock-0">01:00</strong>
+                  </div>
+                </div>
+                <div class="clock-stack clock-right">
+                  <div class="clock-panel" id="turn-clock-panel-1">
+                    <span>턴 시간</span>
+                    <strong id="turn-clock-1">00:15</strong>
+                  </div>
+                  <div class="clock-panel" id="total-clock-panel-1">
+                    <span>총 시간</span>
+                    <strong id="total-clock-1">01:00</strong>
+                  </div>
+                </div>
               </div>
             </section>
 
             <aside class="player-side side-right" aria-label="후공 주사위 영역">
               <div class="dice-tray tray-right">
-                <div class="tray-label">후공 트레이</div>
+                <div class="tray-label">빨강 트레이</div>
                 <div class="tray-dice" id="tray-1"></div>
               </div>
               <div class="tray-controls" id="tray-controls-1"></div>
             </aside>
           </section>
-          <ol class="event-log" id="event-log"></ol>
+
+          <div class="waiting-emoticon-stage" id="waiting-emoticon-stage" hidden></div>
+
+          <section class="mobile-game" id="mobile-game" aria-label="티카투카 모바일 세로 보드">
+            <div
+              class="waiting-emoticon-stage mobile-waiting-emoticon-stage"
+              id="mobile-waiting-emoticon-stage"
+            ></div>
+            <article class="mobile-player-card mobile-opponent-card" id="mobile-opponent-card">
+              <div class="avatar avatar-red" id="mobile-opponent-avatar"></div>
+              <div class="mobile-player-text">
+                <strong id="mobile-opponent-name">상대</strong>
+                <small id="mobile-opponent-state"></small>
+              </div>
+            </article>
+
+            <div class="mobile-room-code" id="mobile-room-code">방 번호 ----</div>
+
+            <section class="mobile-board-section mobile-stack-section">
+              <div class="mobile-board-grid mobile-opponent-grid" id="mobile-opponent-board"></div>
+              <div class="mobile-score-grid" id="mobile-score-grid"></div>
+              <div class="mobile-board-grid mobile-my-grid" id="mobile-my-board"></div>
+            </section>
+
+            <article class="mobile-player-card mobile-my-card" id="mobile-my-card">
+              <div class="avatar avatar-green" id="mobile-my-avatar"></div>
+              <div class="mobile-player-text">
+                <strong id="mobile-my-name">나</strong>
+                <small id="mobile-my-state"></small>
+              </div>
+            </article>
+
+            <section class="mobile-control-dock" aria-label="모바일 조작 버튼">
+              <div class="mobile-tray" id="mobile-tray"></div>
+              <div class="mobile-action-row" id="mobile-action-row"></div>
+              <div class="mobile-bottom-row">
+                <div class="mobile-clock-stack">
+                  <div class="mobile-time" id="mobile-my-turn-clock-panel">
+                    <span>턴 시간</span>
+                    <strong id="mobile-my-turn-clock">00:15</strong>
+                  </div>
+                  <div class="mobile-time" id="mobile-my-total-clock-panel">
+                    <span>총 시간</span>
+                    <strong id="mobile-my-total-clock">01:00</strong>
+                  </div>
+                </div>
+                <button class="mobile-leave-button" id="mobile-leave-button" type="button">나가기</button>
+                <div class="mobile-clock-stack">
+                  <div class="mobile-time opponent" id="mobile-opponent-turn-clock-panel">
+                    <span>턴 시간</span>
+                    <strong id="mobile-opponent-turn-clock">00:15</strong>
+                  </div>
+                  <div class="mobile-time opponent" id="mobile-opponent-total-clock-panel">
+                    <span>총 시간</span>
+                    <strong id="mobile-opponent-total-clock">01:00</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="mobile-result-banner" id="mobile-result-banner" hidden>
+              <strong id="mobile-result-winner-text">승리!</strong>
+              <button type="button" id="mobile-restart-button">다시하기</button>
+              <button type="button" class="kick-opponent-button" id="mobile-kick-opponent-button">
+                내보내기
+              </button>
+              <button type="button" id="mobile-result-leave-button">나가기</button>
+            </section>
+          </section>
         </section>
 
         <section class="audio-panel" id="audio-panel" aria-label="사운드 설정">
@@ -147,6 +290,6 @@
       </section>
     </main>
 
-    <script src="./app.js"></script>
+    <script src="./app.js?v=20260628-3"></script>
   </body>
 </html>

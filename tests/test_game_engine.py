@@ -132,7 +132,7 @@ def test_opening_shield_belongs_to_selected_first_player():
     assert game.held_die.shield is True
 
 
-def test_score_double_triple_and_tiebreak():
+def test_score_double_triple_and_winning_margin_tiebreak():
     assert GameEngine.score_field([die(1, 5), die(2, 5)]) == 15
     assert GameEngine.score_field([die(1, 5), die(2, 5), die(3, 5)]) == 25
 
@@ -143,7 +143,55 @@ def test_score_double_triple_and_tiebreak():
 
     assert result["fieldWins"] == [1, 1]
     assert result["usedTiebreak"] is True
+    assert result["tiebreakScores"] == [5, 6]
+    assert result["tiebreakMargins"] == [4, 5]
     assert result["winner"] == 1
+
+
+def test_one_win_one_loss_one_draw_uses_winning_margin_not_field_score():
+    game = GameEngine()
+    game.boards[0] = [
+        [die(1, 4), die(2, 4), die(3, 5)],  # 17, margin 5
+        [die(4, 2), die(5, 6), die(6, 6)],  # 20
+        [die(7, 2), die(8, 1), die(9, 5)],  # 8
+    ]
+    game.boards[1] = [
+        [die(10, 2), die(11, 2), die(12, 6)],  # 12
+        [die(13, 2), die(14, 6), die(15, 6)],  # 20
+        [die(16, 3), die(17, 3), die(18, 3)],  # 15, margin 7
+    ]
+
+    result = game.evaluate_result()
+
+    assert result["fieldScores"] == [[17, 12], [20, 20], [8, 15]]
+    assert result["fieldWins"] == [1, 1]
+    assert result["totalScores"] == [45, 47]
+    assert result["tiebreakScores"] == [17, 15]
+    assert result["tiebreakMargins"] == [5, 7]
+    assert result["usedTiebreak"] is True
+    assert result["winner"] == 1
+
+
+def test_equal_winning_margins_result_in_draw():
+    game = GameEngine()
+    game.boards[0] = [
+        [die(1, 5), die(2, 5)],  # 15, margin 10
+        [die(3, 3)],  # draw
+        [die(4, 2)],
+    ]
+    game.boards[1] = [
+        [die(5, 5)],
+        [die(6, 3)],  # draw
+        [die(7, 6), die(8, 4), die(9, 2)],  # 12, margin 10
+    ]
+
+    result = game.evaluate_result()
+
+    assert result["fieldScores"] == [[15, 5], [3, 3], [2, 12]]
+    assert result["fieldWins"] == [1, 1]
+    assert result["tiebreakMargins"] == [10, 10]
+    assert result["usedTiebreak"] is True
+    assert result["winner"] is None
 
 
 def test_invalid_actions_are_rejected():
